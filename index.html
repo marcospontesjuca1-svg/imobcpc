@@ -684,7 +684,7 @@ function switchCo(co){
     if(el){el.innerHTML='';delete el.dataset.built;}
   });
   // Re-render all panels that were already initialized
-  Object.keys(_init).forEach(pid=>{if(_init[pid]){mkFilterBar(pid, pid==='bp'||pid==='dre'); fRender(pid);}});
+  Object.keys(_init).forEach(pid=>{if(_init[pid]){mkFilterBar(pid, pid==='bp'||pid==='dre'||pid==='rec'); fRender(pid);}});
 }
 
 const S=a=>a.reduce((x,y)=>x+(y||0),0);
@@ -709,7 +709,7 @@ let recAno=0; // set dynamically in renderRec
 const FS={
   bp:{anos:new Set(ANOS), meses:null, mesAno:ANOS[ANOS.length-1]},  // meses=null → annual mode
   dre:{anos:new Set(ANOS), meses:null, mesAno:ANOS[ANOS.length-1]},
-  rec:{ano:ANOS[ANOS.length-1], meses:null},  // meses=null → all months
+  rec:{anos:new Set(ANOS), meses:null},  // meses=null → all months
   desp:{ano:ANOS[ANOS.length-1], meses:null}
 };
 const MN2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -774,7 +774,7 @@ function mkFilterBar(pid, multi){
 
 function fRefreshBar(pid){
   const el=document.getElementById('fbar-'+pid); if(!el) return;
-  const fs=FS[pid]; const multi=pid==='bp'||pid==='dre';
+  const fs=FS[pid]; const multi=pid==='bp'||pid==='dre'||pid==='rec';
   // Year pills
   el.querySelectorAll('.fmb.yr').forEach(b=>{
     const ano=+b.textContent;
@@ -1482,49 +1482,53 @@ function renderDRE(){
 function recSetAno(a){recAno=a;ANOS.forEach(y=>{const el=document.getElementById('ysb-'+y);if(el)el.classList.toggle('active',a===y);});renderRec();}
 
 function renderRec(){
-  mkFilterBar('rec', false);
+  mkFilterBar('rec', true);
   fRefreshBar('rec');
-  recAno=FS.rec.ano;
+  const recAnos=[...FS.rec.anos].sort();
+  recAno=recAnos[recAnos.length-1]; // latest year used by charts
   _init.rec=true;
-  const fM=FS.rec.meses; // null=todos, Set=meses selecionados
-  const apF=arr=>fM?arr.map((v,i)=>fM.has(i)?v:0):arr;
-  const fLbl=fM?MN.filter((_,i)=>fM.has(i)):MN;
-  const fIdx=fM?[...fM].sort((a,b)=>a-b):MN.map((_,i)=>i);
-  const rt=RTYPE[recAno],rc=RCLI[recAno];
-  const tipos=Object.keys(rt),clientes=Object.keys(rc);
-  const rtF=Object.fromEntries(tipos.map(t=>[t,apF(rt[t])]));
-  const tLoc=S(rtF['Locação']||[]),tVen=S(rtF['Venda Imóveis']||[])+S(rtF['Var.Mon.Venda']||[])+S(rtF['Outras Rec.']||[]),tMet=S(rtF['Lojas Metrô']||[]);
-  const dreRbArr=(DREF[String(recAno)]||{})['rb']||[];
-  const tTot=fM?[...fM].reduce((s,i)=>s+(dreRbArr[i]||0),0):S(dreRbArr);
-  const tAR=Object.values(rc).reduce((s,c)=>s+S(apF(c.fat)),0);
-  const perLabel=fM?fLbl.join(', '):String(recAno);
+  const fM=FS.rec.meses;
+  const fIdx=fM?[...fM].sort((a,b)=>a-b):[0,1,2,3,4,5,6,7,8,9,10,11];
+  const apY=ano=>arr=>fIdx.reduce((s,mi)=>s+(arr[mi]||0),0);
+  const mLbl=_mesRangeLabel(fIdx);
+  const perLabel=recAnos.length>1?mLbl+' — '+recAnos.join(' × '):(fM?mLbl+' '+recAnos[0]:String(recAnos[0]));
 
-  document.getElementById('kpis-rec').innerHTML=[{l:'Receita bruta — '+perLabel,v:tTot},{l:'Locação',v:tLoc,sub:(tLoc/tTot*100).toFixed(1)+'%'},{l:'Venda Imóveis',v:tVen,sub:(tVen/tTot*100).toFixed(1)+'%'},{l:'Lojas Metrô',v:tMet,sub:(tMet/tTot*100).toFixed(1)+'%'}].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v">${F(k.v)}</div><div class="kpi-s neu">${k.sub||''}</div></div>`).join('');
-
-  const diffP=tTot?Math.abs((tAR-tTot)/tTot*100).toFixed(1):0;
-  document.getElementById('nota').innerHTML='<strong>Metodologia:</strong> Faturamento = débitos nas contas AR (10103xxx) — regime de competência. Reconciliação '+recAno+' ('+perLabel+'): AR='+F(tAR)+' · DRE='+F(tTot)+' · dif='+diffP+'%. Aluguéis (grupo) = locatários sem conta individual no plano de contas.';
-
-  const ncols=fIdx.length;
-  const mH='<thead><tr><th style="min-width:140px;text-align:left">Cliente</th><th style="text-align:left;min-width:90px">Métrica</th>'+fLbl.map(m=>`<th>${m}</th>`).join('')+'<th class="tot-col">Total/Últ.</th></tr></thead>';
-  let tb='<tbody>';
-  clientes.forEach((nome,ci)=>{
-    const d=rc[nome];const fT=S(apF(d.fat)),rT=S(apF(d.rec)),sD=d.sal[fIdx[fIdx.length-1]??11];
-    if(fT===0&&sD===0)return;
-    const cor=CLI_C[ci%CLI_C.length];
-    tb+=`<tr class="ch"><td colspan="${ncols+3}" style="color:${cor}">● ${nome}</td></tr>`;
-    tb+=`<tr class="rf"><td></td><td>Receita</td>${fIdx.map(i=>d.fat[i]).map(v=>`<td>${v>0?F(v,true):'<span class="z">—</span>'}</td>`).join('')}<td class="tot-col">${F(fT,true)}</td></tr>`;
-    tb+=`<tr class="rr"><td></td><td>Recebimentos</td>${fIdx.map(i=>d.rec[i]).map(v=>`<td>${v>0?F(v,true):'<span class="z">—</span>'}</td>`).join('')}<td class="tot-col">${F(rT,true)}</td></tr>`;
-    tb+=`<tr class="rs"><td></td><td>Saldo AR</td>${fIdx.map(i=>d.sal[i]).map(v=>`<td>${v>0?F(v,true):'<span class="z">—</span>'}</td>`).join('')}<td class="tot-col">${F(sD,true)}</td></tr>`;
+  // KPIs — per year when multi, single otherwise
+  const kpiData=recAnos.map(ano=>{
+    const rt=RTYPE[ano]||{},dreArr=(DREF[String(ano)]||{})['rb']||[];
+    const apF=apY(ano);
+    return{
+      ano,
+      tTot:fIdx.reduce((s,i)=>s+(dreArr[i]||0),0),
+      tLoc:apF(rt['Locação']||[]),
+      tVen:apF(rt['Venda Imóveis']||[])+apF(rt['Var.Mon.Venda']||[])+apF(rt['Outras Rec.']||[]),
+      tMet:apF(rt['Lojas Metrô']||[])
+    };
   });
-  const tFM=fIdx.map(i=>clientes.reduce((s,n)=>s+(rc[n].fat[i]||0),0));
-  const tRM=fIdx.map(i=>clientes.reduce((s,n)=>s+(rc[n].rec[i]||0),0));
-  const tSM=fIdx.map(i=>clientes.reduce((s,n)=>s+(rc[n].sal[i]||0),0));
-  tb+=`<tr class="tf"><td>TOTAL</td><td>Receita</td>${tFM.map(v=>`<td>${F(v,true)}</td>`).join('')}<td class="tot-col">${F(S(tFM),true)}</td></tr>`;
-  tb+=`<tr class="tr2"><td></td><td>Recebimentos</td>${tRM.map(v=>`<td>${F(v,true)}</td>`).join('')}<td class="tot-col">${F(S(tRM),true)}</td></tr>`;
-  tb+=`<tr class="ts"><td></td><td>Saldo AR</td>${tSM.map(v=>`<td>${F(v,true)}</td>`).join('')}<td class="tot-col">${F(tSM[tSM.length-1],true)}</td></tr>`;
-  tb+='</tbody>';
-  const elTCli=document.getElementById('t-cli');if(elTCli)elTCli.innerHTML=mH+tb;
-  const elTitTCli=document.getElementById('tit-tcli');if(elTitTCli)elTitTCli.textContent='Receita, recebimentos e saldo AR — '+recAno+(fM?' ('+perLabel+')':'');
+  if(recAnos.length>1&&kpiData.length>=2){
+    const [k0,k1]=kpiData;
+    const varPct=(a,b)=>a?((b-a)/Math.abs(a)*100):null;
+    const vp=(a,b)=>{const p=varPct(a,b);return p===null?'—':`<span style="color:${p>0?'#0f6e56':'#c0392b'}">${p>0?'▲':'▼'}${Math.abs(p).toFixed(1)}%</span>`;};
+    document.getElementById('kpis-rec').innerHTML=[
+      {l:'Receita Bruta — '+k0.ano,v:F(k0.tTot),s:''},
+      {l:'Receita Bruta — '+k1.ano,v:F(k1.tTot),s:'vs '+k0.ano+': '+vp(k0.tTot,k1.tTot)},
+      {l:'Locação '+k0.ano+' × '+k1.ano,v:F(k0.tLoc),s:''+k1.ano+': '+F(k1.tLoc)+' '+vp(k0.tLoc,k1.tLoc)},
+      {l:'Lojas Metrô '+k0.ano+' × '+k1.ano,v:F(k0.tMet),s:''+k1.ano+': '+F(k1.tMet)+' '+vp(k0.tMet,k1.tMet)}
+    ].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s neu">${k.s}</div></div>`).join('');
+  } else {
+    const k=kpiData[0];
+    const rc=RCLI[k.ano]||{};
+    const apF=apY(k.ano);
+    const tAR=Object.values(rc).reduce((s,c)=>s+apF(c.fat),0);
+    const diffP=k.tTot?Math.abs((tAR-k.tTot)/k.tTot*100).toFixed(1):0;
+    document.getElementById('kpis-rec').innerHTML=[
+      {l:'Receita bruta — '+perLabel,v:k.tTot},
+      {l:'Locação',v:k.tLoc,sub:(k.tLoc/k.tTot*100).toFixed(1)+'%'},
+      {l:'Venda Imóveis',v:k.tVen,sub:(k.tVen/k.tTot*100).toFixed(1)+'%'},
+      {l:'Lojas Metrô',v:k.tMet,sub:(k.tMet/k.tTot*100).toFixed(1)+'%'}
+    ].map(k2=>`<div class="kpi"><div class="kpi-l">${k2.l}</div><div class="kpi-v">${F(k2.v)}</div><div class="kpi-s neu">${k2.sub||''}</div></div>`).join('');
+    document.getElementById('nota').innerHTML='<strong>Metodologia:</strong> Faturamento = débitos nas contas AR (10103xxx) — regime de competência. Reconciliação '+k.ano+' ('+perLabel+'): AR='+F(tAR)+' · DRE='+F(k.tTot)+' · dif='+diffP+'%. Aluguéis (grupo) = locatários sem conta individual no plano de contas.';
+  }
   renderRecRazao();
 }
 
@@ -2213,24 +2217,99 @@ function closeDreDetail(){document.getElementById('dre-detail-overlay').classLis
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CLI_COLORS=['#185FA5','#e07b39','#2e8b57','#9b3bb5','#d4282e','#0097a7','#c09000','#e91e63','#546E7A','#6d4c41','#1565C0','#558B2F'];
 
-function razaoSetAno(ano){
-  const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||{};
-  const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};const rfin=(rfinSrc[String(ano)])||{};
-
-  // month filter — sync with main Receitas filter bar
+function razaoSetAno(ano, multiAnos){
   const fM=FS&&FS.rec?FS.rec.meses:null;
   const fIdx=fM?[...fM].sort((a,b)=>a-b):MESES_ABR.map((_,i)=>i);
   const fLbl=fIdx.map(i=>MESES_ABR[i]);
+  const mLbl=_mesRangeLabel(fIdx);
+  const RFIN_LBL={'RFIN_APLIC':'Aplicações Gerais','RFIN_XP':'XP Investimentos','RFIN_CEF_MAXI':'CEF FIC Maxi','RFIN_BRADESCO':'Bradesco FIC','RFIN_CEF_GIRO':'CEF FIC Giro'};
+  const AGRUPADOS=new Set(['C.E.D.P','SJ ADM','SHOPPING METRO','FIDUCIAL','A. BELCHIOR','SHOPPING BOA VISTA','BELCHIOR']);
+  const getCo=(src24,src25)=>_ACTIVE_CO==='cpc'?{'2024':src24,'2025':src25}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};
+
+  // ── MULTI-YEAR comparison mode ────────────────────────────────────────────
+  if(multiAnos&&multiAnos.length>1){
+    const anos=multiAnos;
+    const colLbl=a=>mLbl==='Anual'?String(a):mLbl+' '+a;
+    const apF=arr=>fIdx.reduce((s,mi)=>s+(arr[mi]||0),0);
+    const cliSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};
+    const rfinSrcM=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
+
+    const anoData=anos.map(a=>{
+      const cliA=cliSrc[String(a)]||{};
+      const rfinA=rfinSrcM[String(a)]||{};
+      const rfinRows=Object.entries(rfinA).map(([k,arr])=>({name:RFIN_LBL[k]||k,tot:apF(arr)})).filter(r=>r.tot>0);
+      const totalFin=rfinRows.reduce((s,r)=>s+r.tot,0);
+      const totals={};Object.keys(cliA).forEach(c=>{totals[c]=apF(cliA[c])});
+      const dreArr=(DREF[String(a)]||{})['rb']||[];
+      const recBruta=fIdx.reduce((s,i)=>s+(dreArr[i]||0),0)||Object.values(totals).reduce((s,v)=>s+v,0)+totalFin;
+      return{cliA,rfinRows,totalFin,totals,recBruta};
+    });
+
+    const ncY=anos.length;
+    const pctOf=(v,rb)=>rb?(v/rb*100).toFixed(1)+'%':'—';
+    const varCell=(v0,v1)=>{const p=v0?((v1-v0)/Math.abs(v0)*100):null;if(p===null)return '<td style="color:#ccc">—</td>';const s=p>=0?'+':'';return `<td style="color:${p>5?'#0f6e56':p<-5?'#c0392b':'#888'};font-weight:700;font-size:11px">${s}${p.toFixed(1)}%</td>`;};
+    const colspan=ncY*2+(ncY===2?1:0)+1;
+
+    // Header
+    let html=`<thead><tr><th style="min-width:160px;text-align:left">Cliente</th>`;
+    anos.forEach(a=>{html+=`<th style="min-width:90px;color:${anoColors[a]||'#444'}">${colLbl(a)}</th><th style="min-width:40px;font-size:10px;color:#aaa">%</th>`;});
+    if(ncY===2)html+=`<th style="min-width:52px;font-size:10px;color:#888">Var%</th>`;
+    html+=`</tr></thead><tbody>`;
+
+    const grpH=(lbl,col)=>`<tr><td colspan="${colspan}" style="background:${col};color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.07em;padding:7px 12px">${lbl}</td></tr>`;
+    const dRow=(name,vals)=>{let r=`<tr><td style="padding-left:4px">${name}</td>`;vals.forEach((v,ai)=>{r+=`<td>${v>0?F(v,false):'<span class="z">—</span>'}</td><td style="font-size:11px;color:#aaa">${pctOf(v,anoData[ai].recBruta)}</td>`;});if(ncY===2)r+=varCell(vals[0],vals[1]);r+=`</tr>`;return r;};
+    const sRow=(lbl,vals)=>{let r=`<tr class="tf"><td>${lbl}</td>`;vals.forEach((v,ai)=>{r+=`<td>${F(v,false)}</td><td style="font-size:11px;color:#aaa">${pctOf(v,anoData[ai].recBruta)}</td>`;});if(ncY===2)r+=varCell(vals[0],vals[1]);r+=`</tr>`;return r;};
+
+    // All clients across years
+    const allCli=[...new Set(anoData.flatMap(d=>Object.keys(d.totals)))];
+    allCli.sort((a,b)=>Math.max(...anoData.map(d=>d.totals[b]||0))-Math.max(...anoData.map(d=>d.totals[a]||0)));
+    const cliAgrp=allCli.filter(c=>AGRUPADOS.has(c));
+    const cliInt=allCli.filter(c=>!AGRUPADOS.has(c)&&anoData.some(d=>(d.totals[c]||0)>=100));
+
+    // Grupo 1 — Financeiras
+    const allRfinNames=[...new Set(anoData.flatMap(d=>d.rfinRows.map(r=>r.name)))];
+    html+=grpH('1 · Receitas Financeiras','#185FA5');
+    allRfinNames.forEach(n=>{const vals=anoData.map(d=>d.rfinRows.find(r=>r.name===n)?.tot||0);if(vals.some(v=>v>0))html+=dRow(n,vals);});
+    html+=sRow('Subtotal',anoData.map(d=>d.totalFin));
+
+    // Grupo 2 — Agrupados
+    html+=grpH('2 · Clientes Agrupados','#2e8b57');
+    cliAgrp.forEach(c=>{const vals=anoData.map(d=>d.totals[c]||0);if(vals.some(v=>v>0))html+=dRow(c,vals);});
+    html+=sRow('Subtotal',anoData.map(d=>cliAgrp.reduce((s,c)=>s+(d.totals[c]||0),0)));
+
+    // Grupo 3 — Internos
+    html+=grpH('3 · Clientes Internos','#7B5EA7');
+    cliInt.forEach(c=>{const vals=anoData.map(d=>d.totals[c]||0);if(vals.some(v=>v>0))html+=dRow(c,vals);});
+    html+=sRow('Subtotal',anoData.map(d=>cliInt.reduce((s,c)=>s+(d.totals[c]||0),0)));
+
+    // Total geral
+    html+=sRow('TOTAL GERAL',anoData.map(d=>d.recBruta));
+    html+='</tbody>';
+
+    const perLblM=anos.map(a=>colLbl(a)).join(' × ');
+    const tit2=document.getElementById('razao-tit-tbl');
+    if(tit2)tit2.innerHTML=`Receita por Cliente — ${perLblM} <span style="font-size:10px;color:#aaa;font-weight:400">Locação + Lojas Metrô + Rec. Financeiras</span>`;
+    document.getElementById('t-razao-cli').innerHTML=html;
+
+    document.getElementById('razao-kpis').innerHTML=anoData.map((d,ai)=>[
+      {l:'Receita Bruta '+colLbl(anos[ai]),v:F(d.recBruta,false),s:''},
+      {l:'Rec. Financeiras',v:F(d.totalFin,false),s:pctOf(d.totalFin,d.recBruta)}
+    ].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s neu">${k.s}</div></div>`).join('')).join('');
+    const elRfin=document.getElementById('razao-rfin-kpis');if(elRfin)elRfin.innerHTML='';
+    return; // early return — skip single-year code below
+  }
+
+  // ── SINGLE-YEAR mode (original code) ─────────────────────────────────────
+  const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||{};
+  const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};const rfin=(rfinSrc[String(ano)])||{};
   const perLabel=fM?fLbl.join(', '):ano;
   const ncols=fIdx.length;
 
   // ── Grupo 1: Receitas Financeiras (rfin) ──
-  const RFIN_LBL={'RFIN_APLIC':'Aplicações Gerais','RFIN_XP':'XP Investimentos','RFIN_CEF_MAXI':'CEF FIC Maxi','RFIN_BRADESCO':'Bradesco FIC','RFIN_CEF_GIRO':'CEF FIC Giro'};
   const rfinRows=Object.entries(rfin).map(([k,arr])=>({name:RFIN_LBL[k]||k,vals:fIdx.map(i=>arr[i]||0)})).filter(r=>r.vals.reduce((a,b)=>a+b,0)>0);
   const totalFin=rfinRows.reduce((s,r)=>s+r.vals.reduce((a,b)=>a+b,0),0);
 
   // ── Grupo 2: Clientes Agrupados ──
-  const AGRUPADOS=new Set(['C.E.D.P','SJ ADM','SHOPPING METRO','FIDUCIAL','A. BELCHIOR','SHOPPING BOA VISTA','BELCHIOR']);
   const clients=Object.keys(cli);
   const totals={};
   clients.forEach(c=>{totals[c]=fIdx.reduce((s,i)=>s+(cli[c][i]||0),0)});
@@ -2296,7 +2375,8 @@ function razaoSetAno(ano){
 }
 
 function renderRecRazao(){
-  razaoSetAno(String(recAno));
+  const recAnos=[...FS.rec.anos].sort();
+  razaoSetAno(String(recAnos[recAnos.length-1]), recAnos.length>1?recAnos:null);
 }
 
 function renderDesp(){
