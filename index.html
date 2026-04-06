@@ -277,17 +277,22 @@ window._sHash=function(s){let h=0;for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s
   <div class="g4" id="desp-kpis"></div>
 
   <div class="card" style="margin-bottom:11px">
-    <div class="ctit" id="desp-tit-cat">Despesas por Categoria</div>
-    <div class="cw" style="height:210px"><canvas id="c-desp-cat"></canvas></div>
+    <div class="ctit" id="desp-tit-evol">Evolução Mensal das Despesas</div>
+    <div class="cw" style="height:260px"><canvas id="c-desp-evol"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:11px">
+    <div class="ctit" id="desp-tit-rank">Ranking por Categoria — 2024 × 2025</div>
+    <div id="desp-rank" style="padding:0 2px"></div>
   </div>
 
   <div class="g2" style="margin-bottom:11px">
     <div class="card">
-      <div class="ctit" id="desp-tit-manu">Top Fornecedores — Manutenção <span style="font-size:10px;color:#aaa;font-weight:400">Razão · conta 3.01.01.07.01.0064</span></div>
+      <div class="ctit" id="desp-tit-manu">Top Fornecedores — Manutenção <span style="font-size:10px;color:#aaa;font-weight:400">Razão</span></div>
       <div id="desp-forn-manu"></div>
     </div>
     <div class="card">
-      <div class="ctit" id="desp-tit-serv">Top Fornecedores — Serviços PJ <span style="font-size:10px;color:#aaa;font-weight:400">Razão · conta 3.01.01.07.01.0009</span></div>
+      <div class="ctit" id="desp-tit-serv">Top Fornecedores — Serviços PJ <span style="font-size:10px;color:#aaa;font-weight:400">Razão</span></div>
       <div id="desp-forn-serv"></div>
     </div>
   </div>
@@ -843,6 +848,15 @@ function bpUpdCb(){
   if(el)el.textContent=cnt+' mês'+(cnt!==1?'es':'')+' selecionado'+(cnt!==1?'s':'');
 }
 
+function _mesRangeLabel(ms){
+  const qMap={'0,1,2':'T1','3,4,5':'T2','6,7,8':'T3','9,10,11':'T4'};
+  if(ms.length===12) return 'Anual';
+  const key=ms.join(',');
+  if(qMap[key]) return qMap[key];
+  if(ms.length===1) return MN[ms[0]];
+  return MN[ms[0]]+'–'+MN[ms[ms.length-1]];
+}
+
 function renderBP(){
   mkFilterBar('bp', true);
   fRefreshBar('bp');
@@ -862,10 +876,24 @@ function renderBP(){
       if(d) cols.push({label:String(ano),ano,val:(key,mi)=>d[key]?d[key][11]:0});
     });
   } else {
-    const d=BP_DATA[String(bpMesAno)];
-    if(d)[...bpMesSelected].sort((a,b)=>a-b).forEach(mi=>{
-      cols.push({label:MN[mi],ano:bpMesAno,mi,val:(key)=>d[key]?d[key][mi]:0});
-    });
+    const anosM=[..._fsb.anos].sort();
+    const meses=[...bpMesSelected].sort((a,b)=>a-b);
+    if(anosM.length>1){
+      // Multi-year: uma coluna por ano com posição do último mês selecionado
+      const lastMi=meses[meses.length-1]??11;
+      const mLbl=_mesRangeLabel(meses);
+      anosM.forEach(ano=>{
+        const d=BP_DATA[String(ano)];
+        if(d) cols.push({label:mLbl+' '+ano,ano,mi:lastMi,val:(key)=>d[key]?d[key][lastMi]:0});
+      });
+    } else {
+      // Ano único: uma coluna por mês selecionado
+      const ano=anosM[0]||bpMesAno;
+      const d=BP_DATA[String(ano)];
+      if(d) meses.forEach(mi=>{
+        cols.push({label:MN[mi],ano,mi,val:(key)=>d[key]?d[key][mi]:0});
+      });
+    }
   }
 
   // Totals by section per col
@@ -879,7 +907,7 @@ function renderBP(){
     const pc0=secSum(c0,'pc'), pc1=c1?secSum(c1,'pc'):null;
     const pl0=secSum(c0,'pl'), pl1=c1?secSum(c1,'pl'):null;
     const liq0=pc0>0?ac0/pc0:0, liq1=c1&&pc1>0?ac1/pc1:null;
-    const colLbl=bpModo==='ano'?c0.label:(MN[cols[0].ano]||'')+'/'+c0.ano;
+    const colLbl=c0.label;
     const vsLbl=c1?(bpModo==='ano'?'vs '+c1.label:'vs '+c1.label):null;
     document.getElementById('kpis-bp').innerHTML=[
       {l:'Ativo total — '+(bpModo==='ano'?c0.label:colLbl), v:at0, p:at1?PC(at0,at1):null, up:true},
@@ -997,7 +1025,7 @@ function renderBP(){
   document.getElementById('t-bp').innerHTML=thead+tbody;
   const tit=bpModo==='ano'
     ?'Balanço Patrimonial — '+[...bpAnosSelected].sort().join(' × ')+' (posição Dezembro)'
-    :'Balanço Patrimonial — '+bpMesAno+' — '+([...bpMesSelected].sort((a,b)=>a-b).map(i=>MN[i]).join(', ')||'—');
+    :(()=>{const anosL=[..._fsb.anos].sort();const ms=[...bpMesSelected].sort((a,b)=>a-b);const mLbl=_mesRangeLabel(ms);return 'Balanço Patrimonial — '+(anosL.length>1?mLbl+' — '+anosL.join(' × '):mLbl+' '+anosL[0]);})();
   document.getElementById('bp-ttbl').textContent=tit;
 }
 
@@ -1234,7 +1262,8 @@ function dreCollapseAll(){ dreExpanded.clear(); renderDRE(); }
 function buildDRETree(g){
   // Returns flat row list based on expand state
   // Rows: {t, v, cls, key?, hasChildren?, expanded?}
-  const rb=g('rb'),loc=g('loc'),venda=g('venda'),metro=g('metro'),outras=g('outras');
+  const rb=g('rb'),venda=g('venda');
+  const loc=g('loc')+g('metro')+g('outras'); // Metrô + Outras incluídas na locação
   const cofins=g('cofins'),pis=g('pis'),ded=g('ded'),rl=g('rl');
   const cmo=g('cmo'),cop=g('cop'),cbs=g('cbs'),lb=g('lb');
   const rfin=g('rfin');
@@ -1250,8 +1279,6 @@ function buildDRETree(g){
     {t:'RECEITA BRUTA', v:rb, cls:'dre-h1', key:'rb', children:[
       {t:'Receita de locação',          v:loc,   cls:'dre-s1', detailKey:'loc'},
       {t:'Receita de venda de imóveis', v:venda, cls:'dre-s1', detailKey:'venda'},
-      {t:'Receita — Lojas Metrô',       v:metro, cls:'dre-s1', detailKey:'metro'},
-      {t:'Outras receitas da atividade',v:outras,cls:'dre-s1', detailKey:'outras'},
     ]},
     {t:'(-) DEDUÇÕES DA RECEITA BRUTA', v:-ded, cls:'dre-h2', key:'ded', children:[
       {t:'COFINS', v:-cofins, cls:'dre-s2', detailKey:'cofins'},
@@ -1331,7 +1358,7 @@ function renderDRE(){
   const _fsd=FS.dre;
   dreAnosSelected=_fsd.anos;
   if(_fsd.meses===null){dreModo='ano';}
-  else{dreModo='mes';dreMesSelected=_fsd.meses;if(!dreMesAno||dreMesAno===0)dreMesAno=_fsd.mesAno||ANOS[ANOS.length-1];}
+  else{dreModo='mes';dreMesSelected=_fsd.meses;dreMesAno=_fsd.mesAno||ANOS[ANOS.length-1];}
   _init.dre=true;
   dreUpdCheckboxes();
 
@@ -1357,12 +1384,21 @@ function renderDRE(){
       if(d) cols.push({label:String(ano), v:k=>d._anual&&d._anual[k]!==undefined?d._anual[k]:S(d[k]||[]), ano, mi:null});
     });
   } else {
-    // One column per selected month, for the chosen year
-    const d=DREF[String(dreMesAno)];
-    if(d){
-      const meses=[...dreMesSelected].sort((a,b)=>a-b);
-      meses.forEach(mi=>{
-        cols.push({label:MN[mi], v:k=>d[k]?d[k][mi]:0, ano:dreMesAno, mi});
+    const anosM=[...dreAnosSelected].sort();
+    const meses=[...dreMesSelected].sort((a,b)=>a-b);
+    if(anosM.length>1){
+      // Multi-year: uma coluna por ano com soma dos meses selecionados
+      const mLbl=_mesRangeLabel(meses);
+      anosM.forEach(ano=>{
+        const d=DREF[String(ano)];
+        if(d) cols.push({label:mLbl+' '+ano, v:k=>meses.reduce((s,mi)=>s+(d[k]?d[k][mi]:0),0), ano, mi:null});
+      });
+    } else {
+      // Ano único: uma coluna por mês selecionado
+      const ano=anosM[0]||ANOS[ANOS.length-1];
+      const d=DREF[String(ano)];
+      if(d) meses.forEach(mi=>{
+        cols.push({label:MN[mi], v:k=>d[k]?d[k][mi]:0, ano, mi});
       });
     }
   }
@@ -1373,7 +1409,7 @@ function renderDRE(){
   const rb0=sumC('rb'),rl0=sumC('rl'),ebt0=sumC('ebt'),luc0=sumC('lucro');
   const perLabel=dreModo==='ano'
     ? ([...dreAnosSelected].sort().join(' × '))
-    : (dreMesSelected.size===12?'Ano completo '+dreMesAno:dreMesSelected.size+' meses — '+dreMesAno);
+    : (()=>{const anosL=[...dreAnosSelected].sort();const ms=[...dreMesSelected].sort((a,b)=>a-b);const mLbl=_mesRangeLabel(ms);return anosL.length>1?mLbl+' — '+anosL.join(' × '):mLbl+' '+anosL[0];})();
   document.getElementById('dre-kpis').innerHTML=[
     {l:'Receita bruta — '+perLabel, v:rb0},
     {l:'Receita líquida',           v:rl0, sub:rb0?(rl0/rb0*100).toFixed(1)+'% da RB':'—'},
@@ -2271,60 +2307,113 @@ function renderDesp(){
 }
 
 // Mapeamento categoria → chave DREF para suporte ao filtro mensal
-const DKESP={
-  'Manutenção':'dman','Serv.PJ':'dspj','Marketing':'dmkt','Vigilância':'dvig',
-  'Depreciação':'ddep','Assessoria Jur.':'dasj','Veículos':'dvei',
-  'Condomínio':'ccond','Outras':'dout','Desp.Legais':'dtrib','Informática':'dsoft_inf','Conservação':'cspj'
-};
+function _dCatKey(cat){
+  const M={
+    'Manutenção':'dman','Manutencao':'dman',
+    'Serv.PJ':'dspj','Serviços PJ':'dspj',
+    'Condomínio':'ccond','Condominio':'ccond',
+    'Aluguel':'calug',
+    'IPTU':'ciptu',
+    'Desp.Legais':'dtrib','Impostos':'dtrib',
+    'Assessoria Jur.':'dasj','Assessoria Jurídica':'dasj',
+    'Outras':'dout','Outros custos':'dout',
+    'Marketing':'dmkt',
+    'Vigilância':'dvig','Vigilancia':'dvig',
+    'Depreciação':'ddep','Depreciacao':'ddep',
+    'Veículos':'dvei','Veiculos':'dvei',
+    'Informática':'dsoft_inf','Informatica':'dsoft_inf',
+    'Conservação':'cspj','Conservacao':'cspj'
+  };
+  return M[cat]||null;
+}
 
 function despSetAno(ano){
   window._despAno=ano;
   if(FS&&FS.desp) FS.desp.ano=+ano||ano;
   ['2024','2025'].forEach(y=>{const b=document.getElementById('desp-ysb-'+y);if(b)b.classList.toggle('active',y===ano)});
-  const fM=FS.desp.meses; // null=todos, Set=meses selecionados
+  const fM=FS.desp.meses;
   const apF=arr=>fM?arr.map((v,i)=>fM.has(i)?v:0):arr;
   const fIdx=fM?[...fM].sort((a,b)=>a-b):MESES_ABR.map((_,i)=>i);
   const fLbl=fIdx.map(i=>MESES_ABR[i]);
-  const yk=ano==='2024'?'y24':'y25';
-  const dr=DREF[String(ano)]||{};
   const perLabel=fM?fLbl.join(', '):ano;
 
-  // Recalcular totais por categoria usando DREF quando filtro mensal ativo
-  const tdBase=TDESP[yk];
-  const td={};
-  Object.keys(tdBase).forEach(cat=>{
-    const key=DKESP[cat];
-    td[cat]=key&&dr[key]?S(apF(dr[key])):tdBase[cat];
-  });
+  function buildTd(ykData,drYear){
+    const td={};
+    Object.keys(ykData).forEach(cat=>{
+      const key=_dCatKey(cat);
+      if(key&&drYear[key]&&drYear[key].length===12){td[cat]=S(apF(drYear[key]));}
+      else{td[cat]=fM?(ykData[cat]||0)*(fM.size/12):(ykData[cat]||0);}
+    });
+    return td;
+  }
+
+  const yk=ano==='2024'?'y24':'y25';
+  const dr=DREF[String(ano)]||{};
+  const tdBase=TDESP[yk]||{};
+  const td=buildTd(tdBase,dr);
   const cats=Object.keys(td).sort((a,b)=>td[b]-td[a]);
   const total=cats.reduce((s,k)=>s+td[k],0);
   const top=cats[0];
+  const vManu=cats.reduce((s,k)=>{const lk=_dCatKey(k);return lk==='dman'?s+td[k]:s;},0);
+  const vServ=cats.reduce((s,k)=>{const lk=_dCatKey(k);return lk==='dspj'?s+td[k]:s;},0);
 
   document.getElementById('desp-kpis').innerHTML=[
-    {l:'Total Despesas Operacionais — '+perLabel,v:F(total,false),s:'Excl. pessoal e encargos'},
-    {l:'Maior Categoria',v:top,s:F(td[top],false)+' · '+(td[top]/total*100).toFixed(1)+'% do total'},
-    {l:'Manutenção',v:F(td['Manutenção']||0,false),s:(((td['Manutenção']||0)/total)*100).toFixed(1)+'% das despesas op.'},
-    {l:'Serviços PJ',v:F(td['Serv.PJ']||0,false),s:(((td['Serv.PJ']||0)/total)*100).toFixed(1)+'% das despesas op.'}
+    {l:'Total Despesas Op. — '+perLabel,v:F(total,false),s:'Excl. pessoal e encargos'},
+    {l:'Maior Categoria',v:top,s:F(td[top]||0,false)+' · '+((td[top]||0)/total*100).toFixed(1)+'% do total'},
+    {l:'Manutenção',v:F(vManu,false),s:((vManu/total)*100).toFixed(1)+'% das despesas op.'},
+    {l:'Serviços PJ',v:F(vServ,false),s:((vServ/total)*100).toFixed(1)+'% das despesas op.'}
   ].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s neu">${k.s}</div></div>`).join('');
 
-  document.getElementById('desp-tit-cat').textContent='Despesas por Categoria — '+perLabel;
-  mkChart('c-desp-cat',{
-    type:'bar',
-    data:{labels:cats,datasets:[{label:perLabel,data:cats.map(k=>td[k]),backgroundColor:cats.map((_,i)=>['#185FA5','#e07b39','#2e8b57','#9b3bb5','#d4282e','#0097a7','#c09000','#e91e63','#546E7A','#6d4c41'][i]||'#888'),borderWidth:0,borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+F(ctx.parsed.x,false)}}},scales:{x:{ticks:{callback:v=>F(v,false)},grid:{color:'#f0f0ec'}},y:{grid:{display:false}}}}
+  // Stacked monthly evolution chart
+  const DESP_CLR=['#185FA5','#e07b39','#2e8b57','#9b3bb5','#d4282e','#0097a7','#c09000','#e91e63'];
+  const topCats=cats.slice(0,8);
+  const evolDs=topCats.map((cat,i)=>{
+    const key=_dCatKey(cat);
+    const monthly12=key&&dr[key]&&dr[key].length===12?dr[key]:Array(12).fill((tdBase[cat]||0)/12);
+    return{label:cat,data:fIdx.map(mi=>monthly12[mi]),backgroundColor:DESP_CLR[i]+'CC',borderWidth:0,stack:'s0'};
   });
+  const tmEvol=document.getElementById('desp-tit-evol');
+  if(tmEvol)tmEvol.textContent=`Evolução Mensal das Despesas — ${perLabel}`;
+  mkChart('c-desp-evol',{
+    type:'bar',data:{labels:fLbl,datasets:evolDs},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},callback:v=>F(v,false)},grid:{color:'#f0f0ec'}}},
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:11,padding:7}},tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+F(ctx.parsed.y,false)}}}}
+  });
+
+  // Comparison ranking 2024 × 2025
+  const dr24=DREF['2024']||{},dr25=DREF['2025']||{};
+  const tdb24=TDESP['y24']||{},tdb25=TDESP['y25']||{};
+  const td24=buildTd(tdb24,dr24),td25=buildTd(tdb25,dr25);
+  const compLabel=fM?`${perLabel} — 2024 × 2025`:'Anual — 2024 × 2025';
+  const tmRank=document.getElementById('desp-tit-rank');
+  if(tmRank)tmRank.textContent=`Ranking por Categoria — ${compLabel}`;
+  const allCats=[...new Set([...Object.keys(td24),...Object.keys(td25)])];
+  allCats.sort((a,b)=>Math.max(td25[b]||0,td24[b]||0)-Math.max(td25[a]||0,td24[a]||0));
+  const maxV=Math.max(...allCats.map(c=>Math.max(td24[c]||0,td25[c]||0)),1);
+  const rankEl=document.getElementById('desp-rank');
+  if(rankEl){
+    const hdr=`<div style="display:flex;align-items:center;gap:6px;padding:4px 0 8px;font-size:11px;font-weight:700;border-bottom:1px solid #ddddd8"><div style="flex:0 0 118px;color:#888">CATEGORIA</div><div style="flex:2;color:#185FA5">━ 2024</div><div style="flex:2;color:#e07b39">━ 2025</div><div style="flex:0 0 48px;text-align:right;color:#888">VAR.</div></div>`;
+    const rows=allCats.map(cat=>{
+      const v24=td24[cat]||0,v25=td25[cat]||0;
+      const w24=(v24/maxV*100).toFixed(1),w25=(v25/maxV*100).toFixed(1);
+      const pct=v24>0?(v25-v24)/v24*100:null;
+      const pTxt=pct===null?'—':(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(0)+'%';
+      const pCol=pct===null?'#888':pct>5?'#c0392b':pct<-5?'#27ae60':'#888';
+      return`<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #f5f5f2"><div style="flex:0 0 118px;font-size:12px;font-weight:600;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${cat}">${cat}</div><div style="flex:2;display:flex;align-items:center;gap:4px"><div style="flex:1;height:10px;background:#f0f0ec;border-radius:2px;position:relative;overflow:hidden"><div style="position:absolute;inset:0;width:${w24}%;background:#185FA5;border-radius:2px"></div></div><span style="flex:0 0 64px;font-size:11px;text-align:right;color:#444">${F(v24,false)}</span></div><div style="flex:2;display:flex;align-items:center;gap:4px"><div style="flex:1;height:10px;background:#f0f0ec;border-radius:2px;position:relative;overflow:hidden"><div style="position:absolute;inset:0;width:${w25}%;background:#e07b39;border-radius:2px"></div></div><span style="flex:0 0 64px;font-size:11px;text-align:right;color:#444">${F(v25,false)}</span></div><div style="flex:0 0 48px;font-size:11px;font-weight:700;text-align:right;color:${pCol}">${pTxt}</div></div>`;
+    }).join('');
+    rankEl.innerHTML=hdr+rows;
+  }
 
   // Vendor bars — year-aware + month-aware from Razão
   const _fManSrc={cpc:{'2024':CPC_RAZAO_FORN_MANUTENCAO_2024,'2025':CPC_RAZAO_FORN_MANUTENCAO_2025},esam:{'2024':ESAM_RAZAO_FORN_MANUTENCAO_2024,'2025':ESAM_RAZAO_FORN_MANUTENCAO_2025}};
   const _fSrvSrc={cpc:{'2024':CPC_RAZAO_FORN_SERV_PJ_2024,'2025':CPC_RAZAO_FORN_SERV_PJ_2025},esam:{'2024':ESAM_RAZAO_FORN_SERV_PJ_2024,'2025':ESAM_RAZAO_FORN_SERV_PJ_2025}};
   const fManu=(_fManSrc[_ACTIVE_CO]||_fManSrc.cpc)[ano]||{};
   const fServ=(_fSrvSrc[_ACTIVE_CO]||_fSrvSrc.cpc)[ano]||{};
-
   const tmManu=document.getElementById('desp-tit-manu');if(tmManu)tmManu.innerHTML=`Top Fornecedores — Manutenção ${perLabel} <span style="font-size:10px;color:#aaa;font-weight:400">Razão · conta 3.01.01.07.01.0064</span>`;
   const tmServ=document.getElementById('desp-tit-serv');if(tmServ)tmServ.innerHTML=`Top Fornecedores — Serviços PJ ${perLabel} <span style="font-size:10px;color:#aaa;font-weight:400">Razão · conta 3.01.01.07.01.0009</span>`;
   const tmManuMes=document.getElementById('desp-tit-manu-mes');if(tmManuMes)tmManuMes.innerHTML=`Manutenção Mensal ${ano} <span style="font-size:10px;color:#aaa;font-weight:400">evolução mês a mês</span>`;
   const tmServMes=document.getElementById('desp-tit-serv-mes');if(tmServMes)tmServMes.innerHTML=`Serviços PJ Mensal ${ano} <span style="font-size:10px;color:#aaa;font-weight:400">evolução mês a mês</span>`;
-
   function vBars(elId,dataObj){
     const vt={};Object.keys(dataObj).forEach(v=>{vt[v]=S(apF(dataObj[v]))});
     const vs=Object.keys(dataObj).sort((a,b)=>vt[b]-vt[a]);
@@ -2336,7 +2425,6 @@ function despSetAno(ano){
   }
   vBars('desp-forn-manu',fManu);
   vBars('desp-forn-serv',fServ);
-
   const manuMon=fIdx.map(i=>Object.values(fManu).reduce((s,arr)=>s+arr[i],0));
   const servMon=fIdx.map(i=>Object.values(fServ).reduce((s,arr)=>s+arr[i],0));
   mkChart('c-desp-manu',{type:'bar',data:{labels:fLbl,datasets:[{label:'Manutenção',data:manuMon,backgroundColor:'#185FA5CC',borderRadius:3,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+F(ctx.parsed.y,false)}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>F(v,false)},grid:{color:'#f0f0ec'}}}}});
