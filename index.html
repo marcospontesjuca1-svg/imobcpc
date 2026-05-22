@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Painel Imobiliário — CPC / ESAM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f1;color:#1a1a18;padding:20px}
@@ -122,6 +123,28 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f4f1;color:#1a1a18;pa
 .co-btn{font-size:12px;padding:5px 14px;border:none;border-radius:17px;background:transparent;color:#6b6b67;font-weight:700;cursor:pointer;transition:all .15s}
 .co-btn.active{background:#185FA5;color:#fff}
 .co-btn:hover:not(.active){background:#ddddd8}
+/* ─── Upload de Balancetes ─── */
+.up-zone{border:2px dashed #ddddd8;border-radius:10px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:10px;background:#fafaf8}
+.up-zone:hover,.up-zone.drag{border-color:#185FA5;background:#f0f6ff}
+.up-zone p{font-size:11px;color:#888;margin-top:7px;line-height:1.5}
+.up-list{max-height:180px;overflow-y:auto;margin-top:4px}
+.up-item{display:flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid #eee;border-radius:7px;margin-bottom:5px;background:#fff}
+.up-item-info{flex:1;min-width:0}
+.up-item-title{font-size:12px;font-weight:600;color:#1a1a18;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.up-item-meta{font-size:10px;color:#888;margin-top:1px}
+.up-del{width:22px;height:22px;border:1px solid #f5c0c0;border-radius:5px;background:transparent;color:#c0392b;cursor:pointer;font-size:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.up-del:hover{background:#fcebeb}
+.up-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-right:4px}
+.up-badge.bp{background:#e6f1fb;color:#185FA5}
+.up-badge.dre{background:#eaf3de;color:#0f6e56}
+.up-empty{text-align:center;color:#bbb;font-size:12px;padding:14px}
+.cloud-status{font-size:11px;padding:7px 12px;border-radius:7px;margin-top:8px;text-align:center;line-height:1.5}
+.cloud-status.ok{background:#eaf3de;border:1px solid #c0dd97;color:#0f6e56}
+.cloud-status.err{background:#fcebeb;border:1px solid #f5c0c0;color:#a32d2d}
+.cloud-status.info{background:#f0f6ff;border:1px solid #b5d4f4;color:#185FA5}
+.cfg-sel{width:100%;background:#f8f8f5;border:1px solid #ddddd8;border-radius:8px;padding:9px 12px;color:#1a1a18;font-size:12px;outline:none;margin-bottom:6px;cursor:pointer;transition:border-color .2s}
+.cfg-sel:focus{border-color:#185FA5}
+.cfg-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 
 <style>
@@ -1778,6 +1801,8 @@ function switchCfgTab(t){
   document.querySelectorAll('.cfg-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.cfg-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===t));
   cfgFb('',null);
+  if(t==='upload'&&typeof upRenderList==='function')upRenderList();
+  if(t==='nuvem'&&typeof upLoadNuvemCfg==='function')upLoadNuvemCfg();
 }
 function cfgFb(msg,type){
   const e=document.getElementById('cfg-feedback');
@@ -1861,6 +1886,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.ge
       <button class="cfg-tab active" data-tab="login" onclick="switchCfgTab('login')">Acesso</button>
       <button class="cfg-tab" data-tab="senha" onclick="switchCfgTab('senha')">Senha</button>
       <button class="cfg-tab" data-tab="dados" onclick="switchCfgTab('dados')">Dados</button>
+      <button class="cfg-tab" data-tab="upload" onclick="switchCfgTab('upload')">Upload</button>
+      <button class="cfg-tab" data-tab="nuvem" onclick="switchCfgTab('nuvem')">Nuvem</button>
     </div>
     <div class="cfg-body">
 
@@ -1906,6 +1933,72 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.ge
           </div>
           <input type="file" accept=".html" style="display:none" onchange="restoreHTML(this)">
         </label>
+      </div>
+
+      <!-- TAB: Upload de Balancetes -->
+      <div class="cfg-panel" data-panel="upload">
+        <div style="font-size:11px;color:#555;line-height:1.7;padding:9px 12px;background:#f8f8f5;border-radius:7px;border:1px solid #eee;margin-bottom:12px">
+          Importe balancetes em <strong>Excel (.xlsx)</strong> mensalmente. Baixe o modelo, preencha os valores e faça o upload.
+        </div>
+        <div class="cfg-row2">
+          <div>
+            <div class="cfg-label">Empresa</div>
+            <select class="cfg-sel" id="up-empresa">
+              <option value="CPC">CPC</option>
+              <option value="ESAM">ESAM</option>
+            </select>
+          </div>
+          <div>
+            <div class="cfg-label">Tipo</div>
+            <select class="cfg-sel" id="up-tipo">
+              <option value="BP">Bal. Patrimonial</option>
+              <option value="DRE">DRE</option>
+            </select>
+          </div>
+        </div>
+        <div class="cfg-label">Ano de Referência</div>
+        <input class="cfg-input" id="up-ano" type="number" placeholder="Ex: 2025" min="2020" max="2099" value="2025" style="margin-bottom:10px">
+        <div class="up-zone" id="up-zone" onclick="document.getElementById('up-file').click()" ondragover="upDrag(event,true)" ondragleave="upDrag(event,false)" ondrop="upDrop(event)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="1.5" style="margin:0 auto;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Arraste o arquivo <strong>Excel (.xlsx)</strong> aqui<br>ou clique para selecionar</p>
+          <input type="file" id="up-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="upProcessFile(this)">
+        </div>
+        <div style="display:flex;gap:7px;margin-bottom:12px">
+          <button class="cfg-btn-sec" style="flex:1;margin-bottom:0;font-size:11px" onclick="upDownloadTemplate()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar Modelo (.xlsx)
+          </button>
+          <button class="cfg-btn-sec" style="flex:1;margin-bottom:0;font-size:11px" onclick="upExportJSON()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar JSON
+          </button>
+        </div>
+        <div class="cfg-label">Registros Importados (<span id="up-count">0</span>)</div>
+        <div class="up-list" id="up-list"><div class="up-empty">Nenhum dado importado</div></div>
+      </div>
+
+      <!-- TAB: Nuvem (Firebase Sync) -->
+      <div class="cfg-panel" data-panel="nuvem">
+        <div style="font-size:11px;color:#555;line-height:1.7;padding:9px 12px;background:#f8f8f5;border-radius:7px;border:1px solid #eee;margin-bottom:12px">
+          Configure o <strong>Firebase Realtime Database</strong> (gratuito) para que os balancetes importados fiquem disponíveis em qualquer máquina. Crie um projeto em <strong>firebase.google.com</strong>.
+        </div>
+        <div class="cfg-label">URL do Firebase Realtime Database</div>
+        <input class="cfg-input" id="cfg-fb-url" type="url" placeholder="https://seu-projeto-default-rtdb.firebaseio.com">
+        <div class="cfg-label">Database Secret (opcional — para acesso privado)</div>
+        <input class="cfg-input" id="cfg-fb-secret" type="password" placeholder="Chave secreta do Firebase">
+        <button class="cfg-btn-primary" onclick="saveCfgNuvem()" style="margin-bottom:8px">Salvar Configuração</button>
+        <div style="display:flex;gap:7px">
+          <button class="cfg-btn-sec" style="flex:1;margin-bottom:0;font-size:11px" onclick="syncFromCloud()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.35"/></svg>
+            Baixar da Nuvem
+          </button>
+          <button class="cfg-btn-sec" style="flex:1;margin-bottom:0;font-size:11px" onclick="syncToCloud()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.35"/></svg>
+            Enviar para Nuvem
+          </button>
+        </div>
+        <div id="cfg-cloud-status" class="cloud-status" style="display:none"></div>
+        <div style="font-size:10px;color:#aaa;margin-top:8px;text-align:center" id="cfg-last-sync"></div>
       </div>
 
       <div class="cfg-feedback" id="cfg-feedback"></div>
@@ -2511,6 +2604,287 @@ function despSetAno(ano){
   mkChart('c-desp-serv',{type:'bar',data:{labels:fLbl,datasets:[{label:'Serviços PJ',data:servMon,backgroundColor:'#e07b39CC',borderRadius:3,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+F(ctx.parsed.y,false)}}},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>F(v,false)},grid:{color:'#f0f0ec'}}}}});
 }
 
+</script>
+
+<script>
+// ═══════════════ UPLOAD DE BALANCETES ═══════════════
+
+const _BP_KEYS=['ac_disp','ac_clie','ac_cred','ac_esto','ac_desp','anc_rlp','anc_inv','anc_imob','anc_inta','pc_forn','pc_metro','pc_trab','pc_empr','pc_imov','pc_outr','pc_prov','pc_lucr','pnc_res','pl_cap','pl_res','ac_disp_s0','ac_disp_s1','ac_disp_s2','ac_clie_s0','ac_clie_s1','ac_clie_s2','ac_clie_s3','ac_clie_s4','ac_cred_s0','ac_cred_s1','ac_cred_s2','ac_esto_s0','ac_esto_s1','anc_rlp_s0','anc_rlp_s1','anc_rlp_s2','anc_rlp_s3','anc_inv_s0','anc_inv_s1','anc_imob_s0','pc_trab_s0','pc_trab_s1','pc_outr_s0','pc_outr_s1','pc_lucr_s0','pl_cap_s0','pl_res_s0'];
+const _DRE_KEYS=['rb','loc','venda','metro','outras','ded','cofins','pis','rl','cmo','cop','cbs','csal','c13','cferi','cps_cal','cinss_fgts','ccond','calug','ciptu','cspj','csoft_out','lb','rfin','dpess','enc','dsal_pro','d13','dferi','dps_vt_al','einss','efgts','efgtr','dog','dman','dspj','dvei','dmkt','dvig','ddep','dasj','dcon','dsoft_inf','dout','dtrib','dfin','ebt','csll','irpj','ir','lucro'];
+const _MN_HDR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function upGetAll(){return JSON.parse(localStorage.getItem('imobcpc_uploads')||'[]');}
+function upSaveAll(arr){localStorage.setItem('imobcpc_uploads',JSON.stringify(arr));}
+
+function applyUploads(){
+  const ups=upGetAll();
+  ups.sort((a,b)=>a.timestamp-b.timestamp);
+  ups.forEach(u=>{
+    const yr=String(u.ano);
+    if(u.empresa==='CPC'){
+      if(u.tipo==='BP'){if(!CPC_BP_DATA[yr])CPC_BP_DATA[yr]={};Object.assign(CPC_BP_DATA[yr],u.data);}
+      else if(u.tipo==='DRE'){if(!CPC_DREF[yr])CPC_DREF[yr]={};Object.assign(CPC_DREF[yr],u.data);}
+    } else if(u.empresa==='ESAM'){
+      if(u.tipo==='BP'){if(!ESAM_BP_DATA[yr])ESAM_BP_DATA[yr]={};Object.assign(ESAM_BP_DATA[yr],u.data);}
+      else if(u.tipo==='DRE'){if(!ESAM_DREF[yr])ESAM_DREF[yr]={};Object.assign(ESAM_DREF[yr],u.data);}
+    }
+  });
+  // Recalcula ANOS incluindo anos dos uploads
+  const allAnos=new Set([...Object.keys(CPC_DREF).map(Number),...Object.keys(ESAM_DREF).map(Number)]);
+  ANOS=[...allAnos].sort();
+  // Sincroniza filtros com os novos anos
+  ANOS.forEach(y=>{
+    if(FS.bp&&FS.bp.anos)FS.bp.anos.add(y);
+    if(FS.dre&&FS.dre.anos)FS.dre.anos.add(y);
+    if(FS.rec&&FS.rec.anos)FS.rec.anos.add(y);
+  });
+  // Força reconstrução das barras de filtro e re-renderização
+  ['bp','dre','rec','desp'].forEach(pid=>{
+    const el=document.getElementById('fbar-'+pid);
+    if(el){el.innerHTML='';delete el.dataset.built;}
+  });
+  Object.keys(_init).forEach(k=>{_init[k]=false;});
+}
+
+// Aplica uploads salvos ao carregar a página
+(function(){try{applyUploads();}catch(e){console.warn('applyUploads init:',e);}})();
+
+// ─── Drag & Drop ───
+function upDrag(e,on){
+  e.preventDefault();
+  const z=document.getElementById('up-zone');
+  if(z)z.classList.toggle('drag',on);
+}
+function upDrop(e){
+  e.preventDefault();
+  upDrag(e,false);
+  const f=e.dataTransfer.files[0];
+  if(f)upProcessFileObj(f);
+}
+function upProcessFile(input){
+  const f=input.files[0];
+  if(f)upProcessFileObj(f);
+  input.value='';
+}
+
+// ─── Processamento do arquivo ───
+function upProcessFileObj(file){
+  const empresa=document.getElementById('up-empresa').value;
+  const tipo=document.getElementById('up-tipo').value;
+  const ano=parseInt(document.getElementById('up-ano').value)||new Date().getFullYear();
+  if(!ano||ano<2000||ano>2099){cfgFb('Ano inválido (2000–2099).','err');return;}
+  const isXLS=/\.xlsx?$/i.test(file.name);
+  const reader=new FileReader();
+  if(isXLS){
+    reader.onload=e=>{
+      try{
+        if(typeof XLSX==='undefined'){cfgFb('Biblioteca Excel não disponível. Recarregue a página.','err');return;}
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:0});
+        const data=_parseBalanceteRows(rows,tipo);
+        if(!Object.keys(data).length){cfgFb('Nenhuma conta reconhecida. Verifique o modelo.','err');return;}
+        upSaveRecord({empresa,tipo,ano,data,filename:file.name,timestamp:Date.now()});
+        applyUploads();
+        upRenderList();
+        cfgFb('Importado: '+file.name+' ('+empresa+' · '+tipo+' · '+ano+')','ok');
+      }catch(err){cfgFb('Erro ao ler Excel: '+err.message,'err');}
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.onload=e=>{
+      try{
+        const rows=e.target.result.trim().split(/\r?\n/).map(l=>l.split(/[,;]/).map(v=>v.trim()));
+        const data=_parseBalanceteRows(rows,tipo);
+        if(!Object.keys(data).length){cfgFb('Nenhuma conta reconhecida. Verifique o modelo.','err');return;}
+        upSaveRecord({empresa,tipo,ano,data,filename:file.name,timestamp:Date.now()});
+        applyUploads();
+        upRenderList();
+        cfgFb('Importado: '+file.name+' ('+empresa+' · '+tipo+' · '+ano+')','ok');
+      }catch(err){cfgFb('Erro ao ler CSV: '+err.message,'err');}
+    };
+    reader.readAsText(file,'UTF-8');
+  }
+}
+
+// ─── Parse das linhas (Excel ou CSV) ───
+function _parseBalanceteRows(rows,tipo){
+  if(!rows||rows.length<2)return{};
+  const validKeys=new Set(tipo==='BP'?_BP_KEYS:_DRE_KEYS);
+  const result={};
+  // Detecta formato de mês único: procura linha com "Mes" ou "Mês"
+  let mesSingle=-1;
+  for(const row of rows){
+    const c0=String(row[0]||'').trim().toLowerCase().replace(/[êé]/g,'e');
+    if(c0==='mes'){mesSingle=parseInt(row[1])-1;break;}
+  }
+  for(const row of rows){
+    if(!row||row[0]===undefined||row[0]==='')continue;
+    const key=String(row[0]).trim().toLowerCase();
+    if(key==='conta'||key==='chave'||key==='mes'||key==='mês'||key==='mês')continue;
+    if(!validKeys.has(key))continue;
+    if(mesSingle>=0&&mesSingle<=11){
+      // Formato mês único: Conta | Valor
+      const val=parseFloat(String(row[1]||0).replace(',','.'))||0;
+      if(!result[key])result[key]=new Array(12).fill(0);
+      result[key][mesSingle]=val;
+    } else {
+      // Formato anual: Conta | Jan | Fev | ... | Dez (12 colunas)
+      const vals=[];
+      for(let i=1;i<=12;i++){
+        vals.push(parseFloat(String(row[i]||0).replace(',','.'))||0);
+      }
+      result[key]=vals;
+    }
+  }
+  return result;
+}
+
+// ─── Persistência dos registros ───
+function upSaveRecord(rec){
+  const all=upGetAll();
+  const idx=all.findIndex(u=>u.empresa===rec.empresa&&u.tipo===rec.tipo&&u.ano===rec.ano);
+  const id=idx>=0?all[idx].id:('up_'+Date.now());
+  if(idx>=0)all[idx]={...rec,id};
+  else all.push({...rec,id});
+  upSaveAll(all);
+}
+
+function upDeleteRecord(id){
+  if(!confirm('Remover este registro?\nA página será recarregada para aplicar a remoção.'))return;
+  upSaveAll(upGetAll().filter(u=>u.id!==id));
+  location.reload();
+}
+
+// ─── Renderiza lista de importações ───
+function upRenderList(){
+  const list=document.getElementById('up-list');
+  const cnt=document.getElementById('up-count');
+  if(!list)return;
+  const all=upGetAll();
+  if(cnt)cnt.textContent=all.length;
+  if(!all.length){list.innerHTML='<div class="up-empty">Nenhum dado importado</div>';return;}
+  list.innerHTML='';
+  [...all].reverse().forEach(u=>{
+    const d=document.createElement('div');
+    d.className='up-item';
+    const ts=u.timestamp?new Date(u.timestamp).toLocaleString('pt-BR'):'—';
+    const tipoCls=(u.tipo==='BP'?'bp':'dre');
+    d.innerHTML='<div class="up-item-info"><div class="up-item-title"><span class="up-badge '+tipoCls+'">'+u.tipo+'</span>'+u.empresa+' · '+u.ano+'</div><div class="up-item-meta">'+(u.filename||'—')+' · '+ts+'</div></div><button class="up-del" title="Remover" onclick="upDeleteRecord(\''+u.id+'\')">✕</button>';
+    list.appendChild(d);
+  });
+}
+
+// ─── Download do Modelo Excel/CSV ───
+function upDownloadTemplate(){
+  const tipo=document.getElementById('up-tipo').value;
+  const ano=parseInt(document.getElementById('up-ano').value)||new Date().getFullYear();
+  const empresa=document.getElementById('up-empresa').value;
+  const keys=tipo==='BP'?_BP_KEYS:_DRE_KEYS;
+  if(typeof XLSX!=='undefined'){
+    const wb=XLSX.utils.book_new();
+    const aoa=[['Conta',..._MN_HDR],...keys.map(k=>[k,...new Array(12).fill(0)])];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:20},...new Array(12).fill({wch:14})];
+    XLSX.utils.book_append_sheet(wb,ws,'Balancete');
+    XLSX.writeFile(wb,'modelo_'+empresa+'_'+tipo+'_'+ano+'.xlsx');
+    cfgFb('Modelo Excel baixado!','ok');
+  } else {
+    let csv='Conta,'+_MN_HDR.join(',')+'\n';
+    keys.forEach(k=>{csv+=k+','+new Array(12).fill('0').join(',')+'\n';});
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='modelo_'+empresa+'_'+tipo+'_'+ano+'.csv';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    cfgFb('Modelo CSV baixado!','ok');
+  }
+}
+
+// ─── Exportar JSON para transferência entre máquinas ───
+function upExportJSON(){
+  const all=upGetAll();
+  if(!all.length){cfgFb('Nenhum dado para exportar.','err');return;}
+  const blob=new Blob([JSON.stringify(all,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='imobcpc_balancetes_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  cfgFb('JSON exportado com sucesso!','ok');
+}
+
+// ═══════════════ NUVEM — Firebase Realtime Database REST ═══════════════
+
+function upLoadNuvemCfg(){
+  const urlEl=document.getElementById('cfg-fb-url');
+  const secEl=document.getElementById('cfg-fb-secret');
+  const lsEl=document.getElementById('cfg-last-sync');
+  const csEl=document.getElementById('cfg-cloud-status');
+  if(urlEl)urlEl.value=localStorage.getItem('imobcpc_firebase_url')||'';
+  if(secEl)secEl.value=localStorage.getItem('imobcpc_firebase_secret')||'';
+  if(lsEl){const t=localStorage.getItem('imobcpc_last_sync');lsEl.textContent=t?'Última sincronização: '+t:'';}
+  if(csEl)csEl.style.display='none';
+}
+
+function saveCfgNuvem(){
+  const url=(document.getElementById('cfg-fb-url').value||'').trim();
+  const sec=(document.getElementById('cfg-fb-secret').value||'').trim();
+  if(!url){cfgFb('Informe a URL do Firebase Realtime Database.','err');return;}
+  localStorage.setItem('imobcpc_firebase_url',url);
+  if(sec)localStorage.setItem('imobcpc_firebase_secret',sec);
+  else localStorage.removeItem('imobcpc_firebase_secret');
+  cfgFb('Configuração salva!','ok');
+  _cloudSt('URL e chave salvas com sucesso.','info');
+}
+
+function _cloudSt(msg,type){
+  const el=document.getElementById('cfg-cloud-status');
+  if(!el)return;
+  el.textContent=msg;el.className='cloud-status '+type;el.style.display='block';
+}
+
+async function syncToCloud(){
+  const url=localStorage.getItem('imobcpc_firebase_url');
+  const sec=localStorage.getItem('imobcpc_firebase_secret')||'';
+  if(!url){cfgFb('Configure a URL do Firebase na aba Nuvem.','err');return;}
+  const ep=url.replace(/\/+$/,'')+'/imobcpc_uploads.json'+(sec?'?auth='+encodeURIComponent(sec):'');
+  _cloudSt('Enviando dados para a nuvem…','info');
+  try{
+    const r=await fetch(ep,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(upGetAll())});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const ts=new Date().toLocaleString('pt-BR');
+    localStorage.setItem('imobcpc_last_sync',ts);
+    const lsEl=document.getElementById('cfg-last-sync');
+    if(lsEl)lsEl.textContent='Última sincronização: '+ts;
+    _cloudSt('Dados enviados com sucesso!','ok');
+    cfgFb('Sincronizado com a nuvem!','ok');
+  }catch(e){_cloudSt('Erro ao enviar: '+e.message,'err');cfgFb('Falha na sincronização.','err');}
+}
+
+async function syncFromCloud(){
+  const url=localStorage.getItem('imobcpc_firebase_url');
+  const sec=localStorage.getItem('imobcpc_firebase_secret')||'';
+  if(!url){cfgFb('Configure a URL do Firebase na aba Nuvem.','err');return;}
+  const ep=url.replace(/\/+$/,'')+'/imobcpc_uploads.json'+(sec?'?auth='+encodeURIComponent(sec):'');
+  _cloudSt('Baixando dados da nuvem…','info');
+  try{
+    const r=await fetch(ep);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    if(!data||!Array.isArray(data)){_cloudSt('Nenhum dado encontrado na nuvem.','info');return;}
+    upSaveAll(data);
+    applyUploads();
+    upRenderList();
+    const ts=new Date().toLocaleString('pt-BR');
+    localStorage.setItem('imobcpc_last_sync',ts);
+    const lsEl=document.getElementById('cfg-last-sync');
+    if(lsEl)lsEl.textContent='Última sincronização: '+ts;
+    _cloudSt(data.length+' registro(s) sincronizado(s) com sucesso!','ok');
+    cfgFb('Dados recebidos da nuvem!','ok');
+  }catch(e){_cloudSt('Erro ao baixar: '+e.message,'err');cfgFb('Falha ao baixar dados.','err');}
+}
 </script>
 </body>
 </html>
