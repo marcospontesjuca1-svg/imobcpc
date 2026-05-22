@@ -2817,12 +2817,15 @@ function upExportJSON(){
 
 // ═══════════════ NUVEM — Firebase Realtime Database REST ═══════════════
 
+const FIREBASE_DEFAULT_URL='https://imobcpc-b4f36-default-rtdb.firebaseio.com';
+function _fbUrl(){return localStorage.getItem('imobcpc_firebase_url')||FIREBASE_DEFAULT_URL;}
+
 function upLoadNuvemCfg(){
   const urlEl=document.getElementById('cfg-fb-url');
   const secEl=document.getElementById('cfg-fb-secret');
   const lsEl=document.getElementById('cfg-last-sync');
   const csEl=document.getElementById('cfg-cloud-status');
-  if(urlEl)urlEl.value=localStorage.getItem('imobcpc_firebase_url')||'';
+  if(urlEl)urlEl.value=_fbUrl();
   if(secEl)secEl.value=localStorage.getItem('imobcpc_firebase_secret')||'';
   if(lsEl){const t=localStorage.getItem('imobcpc_last_sync');lsEl.textContent=t?'Última sincronização: '+t:'';}
   if(csEl)csEl.style.display='none';
@@ -2846,9 +2849,8 @@ function _cloudSt(msg,type){
 }
 
 async function syncToCloud(){
-  const url=localStorage.getItem('imobcpc_firebase_url');
+  const url=_fbUrl();
   const sec=localStorage.getItem('imobcpc_firebase_secret')||'';
-  if(!url){cfgFb('Configure a URL do Firebase na aba Nuvem.','err');return;}
   const ep=url.replace(/\/+$/,'')+'/imobcpc_uploads.json'+(sec?'?auth='+encodeURIComponent(sec):'');
   _cloudSt('Enviando dados para a nuvem…','info');
   try{
@@ -2864,9 +2866,8 @@ async function syncToCloud(){
 }
 
 async function syncFromCloud(){
-  const url=localStorage.getItem('imobcpc_firebase_url');
+  const url=_fbUrl();
   const sec=localStorage.getItem('imobcpc_firebase_secret')||'';
-  if(!url){cfgFb('Configure a URL do Firebase na aba Nuvem.','err');return;}
   const ep=url.replace(/\/+$/,'')+'/imobcpc_uploads.json'+(sec?'?auth='+encodeURIComponent(sec):'');
   _cloudSt('Baixando dados da nuvem…','info');
   try{
