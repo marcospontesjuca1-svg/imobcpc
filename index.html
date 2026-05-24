@@ -2317,8 +2317,10 @@ const _RAZ_CLI_ALIAS={
 function _razAliasName(desc){
   if(_RAZ_CLI_ALIAS[desc])return _RAZ_CLI_ALIAS[desc];
   const d=desc.trim().toUpperCase();
+  // Qualquer conta que comece com "Clientes" → SHOPPING METRO
+  if(/^CLIENTES/.test(d))return 'SHOPPING METRO';
   // Contas de inquilinos do Shopping Metrô: prefixo LJ/Q ou qualquer menção a METRO
-  if(/^LJ[\s\-\/]/.test(d)||/^Q[\s\-\/]/.test(d)||d==='CLIENTES LJ'||d==='CLIENTES Q'||/METR[OÔ]/.test(d))return 'SHOPPING METRO';
+  if(/^LJ[\s\-\/]/.test(d)||/^Q[\s\-\/]/.test(d)||/METR[OÔ]/.test(d))return 'SHOPPING METRO';
   return desc;
 }
 // Builds {clientName:[12months]} from AR accounts (1.1.2.xx and 1.1.3.xx) in imported Razão records
