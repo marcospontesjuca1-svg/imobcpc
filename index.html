@@ -2617,6 +2617,152 @@ function upGetAll(){return JSON.parse(localStorage.getItem('imobcpc_uploads')||'
 function upSaveAll(arr){localStorage.setItem('imobcpc_uploads',JSON.stringify(arr));}
 
 // ─── Detecção e parse do Balancete bruto (formato sistema contábil) ───
+// ─── Parser BIFF8/OLE2 nativo — fallback para .xls com BOUNDSHEET corrompido ───
+function _xls_readBiff8(arrayBuffer){
+  const u8=new Uint8Array(arrayBuffer);
+  if(u8.length<512||u8[0]!==0xD0||u8[1]!==0xCF||u8[2]!==0x11||u8[3]!==0xE0)return null;
+  const r16=(b,o)=>b[o]|(b[o+1]<<8);
+  const r32=(b,o)=>((b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0);
+  const ss=1<<r16(u8,0x1E);
+  // Monta FAT a partir do DIFAT no cabeçalho
+  const fat=[];
+  for(let di=0;di<109;di++){
+    const fs=r32(u8,0x4C+di*4);
+    if(fs>=0xFFFFFFFC)break;
+    const base=(fs+1)*ss;
+    for(let j=0;j<ss;j+=4)fat.push(r32(u8,base+j));
+  }
+  // Lê cadeia de setores
+  const readChain=(start,maxSz)=>{
+    const parts=[];let s=start,total=0;
+    while(s<0xFFFFFFFC&&(maxSz===undefined||total<maxSz+ss)){
+      const b=(s+1)*ss;
+      parts.push(u8.subarray(b,Math.min(b+ss,u8.length)));
+      total+=ss;s=fat[s]!==undefined?fat[s]:0xFFFFFFFE;
+    }
+    const out=new Uint8Array(total);
+    let p=0;for(const c of parts){out.set(c,p);p+=c.length;}
+    return maxSz!==undefined?out.subarray(0,Math.min(maxSz,total)):out;
+  };
+  // Lê diretório raiz e localiza stream Workbook
+  const dir=readChain(r32(u8,0x30));
+  let wbSec=-1,wbSz=0;
+  for(let i=0;i*128<dir.length;i++){
+    const nLen=r16(dir,i*128+64);if(nLen<2)continue;
+    let nm='';for(let c=0;c<(nLen-2)/2;c++)nm+=String.fromCharCode(r16(dir,i*128+c*2));
+    if(nm==='Workbook'||nm==='Book'){wbSec=r32(dir,i*128+116);wbSz=r32(dir,i*128+120);break;}
+  }
+  if(wbSec<0)return null;
+  const wb=readChain(wbSec,wbSz);
+  // ── Coleta SST + CONTINUE ──
+  let p=0,sstChunks=[],inSST=false;
+  while(p+4<=wb.length){
+    const rt=r16(wb,p),ln=r16(wb,p+2);
+    if(rt===0x00FC){sstChunks=[wb.subarray(p+4,p+4+ln)];inSST=true;}
+    else if(inSST&&rt===0x003C)sstChunks.push(wb.subarray(p+4,p+4+ln));
+    else if(inSST)break;
+    p+=4+ln;
+  }
+  // ── Parses SST ──
+  const sst=[];
+  if(sstChunks.length){
+    const cstU=r32(sstChunks[0],4);
+    let ci=0,cp=8;
+    const rb=()=>{
+      while(ci<sstChunks.length&&cp>=sstChunks[ci].length){ci++;cp=0;}
+      return ci<sstChunks.length?sstChunks[ci][cp++]:0;
+    };
+    const r16s=()=>rb()|(rb()<<8);
+    const skipN=(n)=>{for(let i=0;i<n;i++)rb();};
+    const readChars=(cch,fHigh)=>{
+      let str='',left=cch,high=fHigh;
+      while(left>0){
+        // Avança chunks esgotados; ao entrar num CONTINUE, lê novo grbit para os chars
+        while(ci<sstChunks.length&&cp>=sstChunks[ci].length){
+          ci++;cp=0;
+          if(ci<sstChunks.length)high=sstChunks[ci][cp++]&1;
+        }
+        if(ci>=sstChunks.length)break;
+        const avail=sstChunks[ci].length-cp,csz=high?2:1;
+        const n=Math.min(left,Math.floor(avail/csz));
+        if(n<=0){ci++;cp=0;if(ci<sstChunks.length)high=sstChunks[ci][cp++]&1;continue;}
+        for(let c=0;c<n;c++){
+          str+=String.fromCharCode(high?(sstChunks[ci][cp]|(sstChunks[ci][cp+1]<<8)):sstChunks[ci][cp]);
+          cp+=csz;
+        }
+        left-=n;
+      }
+      return str;
+    };
+    for(let si=0;si<cstU;si++){
+      const cch=r16s(),grbit=rb();
+      const cRun=(grbit>>3)&1?r16s():0;
+      const cbExt=(grbit>>2)&1?(rb()|(rb()<<8)|(rb()<<16)|(rb()<<24)):0;
+      sst.push(readChars(cch,grbit&1));
+      skipN(cRun*4+cbExt);
+    }
+  }
+  // ── Localiza BOF da planilha (ignora offset do BOUNDSHEET — pode estar corrompido) ──
+  p=0;let wsStart=-1;
+  while(p+4<=wb.length){
+    const rt=r16(wb,p),ln=r16(wb,p+2);
+    if(rt===0x0809&&ln>=8&&r16(wb,p+6)===0x0010){wsStart=p+4+ln;break;}
+    p+=4+ln;
+  }
+  if(wsStart<0)return null;
+  // ── Lê células ──
+  const rowMap={};
+  p=wsStart;
+  while(p+4<=wb.length){
+    const rt=r16(wb,p),ln=r16(wb,p+2);
+    if(rt===0x000A)break;
+    if(rt===0x0203&&ln>=14){// NUMBER: row col xf f64
+      const row=r16(wb,p+4),col=r16(wb,p+6);
+      const dv=new DataView(wb.buffer,wb.byteOffset+p+10,8);
+      if(!rowMap[row])rowMap[row]={};
+      rowMap[row][col]=dv.getFloat64(0,true);
+    }else if(rt===0x00FD&&ln>=10){// LABELSST: row col xf sstidx
+      const row=r16(wb,p+4),col=r16(wb,p+6);
+      const idx=r32(wb,p+10);
+      if(!rowMap[row])rowMap[row]={};
+      rowMap[row][col]=sst[idx]||'';
+    }else if(rt===0x027E&&ln>=10){// RK: row col xf rk
+      const row=r16(wb,p+4),col=r16(wb,p+6);
+      const rk=r32(wb,p+10);
+      let val;
+      if(rk&2){val=(rk|0)>>2;}
+      else{const dv=new DataView(new ArrayBuffer(8));dv.setUint32(0,0,true);dv.setUint32(4,rk&~3,true);val=dv.getFloat64(0,true);}
+      if(rk&1)val/=100;
+      if(!rowMap[row])rowMap[row]={};
+      rowMap[row][col]=val;
+    }else if(rt===0x00BD){// MULRK
+      const row=r16(wb,p+4),colFirst=r16(wb,p+6),nCols=(ln-6)/6;
+      for(let c=0;c<nCols;c++){
+        const rk=r32(wb,p+10+c*6);
+        let val;
+        if(rk&2){val=(rk|0)>>2;}
+        else{const dv=new DataView(new ArrayBuffer(8));dv.setUint32(0,0,true);dv.setUint32(4,rk&~3,true);val=dv.getFloat64(0,true);}
+        if(rk&1)val/=100;
+        if(!rowMap[row])rowMap[row]={};
+        rowMap[row][colFirst+c]=val;
+      }
+    }
+    p+=4+ln;
+  }
+  // ── Monta array de linhas ──
+  const maxRow=Object.keys(rowMap).length?Math.max(...Object.keys(rowMap).map(Number)):-1;
+  if(maxRow<0)return[];
+  const rows=[];
+  for(let i=0;i<=maxRow;i++){
+    const r=rowMap[i]||{};
+    const maxCol=Object.keys(r).length?Math.max(...Object.keys(r).map(Number)):-1;
+    const row=new Array(maxCol+1).fill(0);
+    for(let c=0;c<=maxCol;c++)row[c]=r[c]!==undefined?r[c]:0;
+    rows.push(row);
+  }
+  return rows;
+}
+
 function _detectRawBalancete(rows){
   // Busca "BALANCETE" em qualquer célula das primeiras 10 linhas
   for(let i=0;i<Math.min(10,rows.length);i++){
@@ -2828,10 +2974,16 @@ function upProcessFileObj(file){
   if(isXLS){
     reader.onload=e=>{
       try{
-        if(typeof XLSX==='undefined'){cfgFb('Biblioteca Excel não disponível. Recarregue a página.','err');return;}
-        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:0});
+        let rows=[];
+        if(typeof XLSX!=='undefined'){
+          const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:0});
+        }
+        // Se SheetJS retornou 0 linhas (p.ex. BOUNDSHEET corrompido), usa parser BIFF8 próprio
+        if(!rows.length&&/\.xls$/i.test(file.name)){
+          rows=_xls_readBiff8(e.target.result)||[];
+        }
         if(_detectRawBalancete(rows)){_saveBalanceteResult(_parseRawBalancete(rows),file.name);return;}
         const data=_parseBalanceteRows(rows,tipo);
         if(!Object.keys(data).length){cfgFb('Nenhuma conta reconhecida. Verifique o modelo.','err');return;}
