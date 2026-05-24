@@ -943,12 +943,15 @@ function renderBP(){
   bpUpdCb();
   const fL=v=>v===0?'<span style="color:#ccc">-</span>':(v<0?`<span style="color:#a32d2d">(${F(Math.abs(v),true)})</span>`:F(v,true));
 
+  // Returns last month index (0-11) that has data in BP_DATA entry
+  const _bpLastMi=d=>{const ref=d['ac_disp']||d['pl_cap']||Object.values(d)[0]||[];for(let i=11;i>=0;i--){if(ref[i])return i;}return 11;};
+
   // Build columns
   let cols=[];
   if(bpModo==='ano'){
     [...bpAnosSelected].sort().forEach(ano=>{
       const d=BP_DATA[String(ano)];
-      if(d) cols.push({label:String(ano),ano,val:(key,mi)=>d[key]?d[key][11]:0});
+      if(d){const lmi=_bpLastMi(d);const lbl=lmi===11?String(ano):MN[lmi]+'/'+ano;cols.push({label:lbl,ano,lmi,val:(key)=>d[key]?d[key][lmi]:0});}
     });
   } else {
     const anosM=[..._fsb.anos].sort();
@@ -1099,7 +1102,7 @@ function renderBP(){
 
   document.getElementById('t-bp').innerHTML=thead+tbody;
   const tit=bpModo==='ano'
-    ?'Balanço Patrimonial — '+[...bpAnosSelected].sort().join(' × ')+' (posição Dezembro)'
+    ?'Balanço Patrimonial — '+cols.map(c=>c.label).join(' × ')+(cols.length&&cols[0].lmi===11?' (posição Dezembro)':'')
     :(()=>{const anosL=[..._fsb.anos].sort();const ms=[...bpMesSelected].sort((a,b)=>a-b);const mLbl=_mesRangeLabel(ms);return 'Balanço Patrimonial — '+(anosL.length>1?mLbl+' — '+anosL.join(' × '):mLbl+' '+anosL[0]);})();
   document.getElementById('bp-ttbl').textContent=tit;
 }
@@ -2291,8 +2294,9 @@ const _RAZ_ACCT_DKEY={
 };
 // Builds {clientName:[12months]} from AR accounts (1.1.2.xx) in imported Razão records
 function _razaoCliSrc(empresa,ano){
+  const _ano=Number(ano);
   const res={};
-  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
       if(!res[conta.desc])res[conta.desc]=new Array(12).fill(0);
@@ -2303,8 +2307,9 @@ function _razaoCliSrc(empresa,ano){
 }
 // Builds RTYPE-compatible {'Locação':[12m],'Lojas Metrô':[12m]} from Razão AR accounts
 function _razaoRtypeSrc(empresa,ano){
+  const _ano=Number(ano);
   const res={'Locação':new Array(12).fill(0),'Lojas Metrô':new Array(12).fill(0)};
-  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
       const key=/metr[oô]/i.test(conta.desc)?'Lojas Metrô':'Locação';
@@ -2315,8 +2320,9 @@ function _razaoRtypeSrc(empresa,ano){
 }
 // Builds RCLI-compatible {clientName:{fat:[12m],rec:[12m],sal:[12m]}} from Razão AR accounts
 function _razaoRcliSrc(empresa,ano){
+  const _ano=Number(ano);
   const res={};
-  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
       if(!res[conta.desc])res[conta.desc]={fat:new Array(12).fill(0),rec:new Array(12).fill(0),sal:new Array(12).fill(0)};
@@ -2329,8 +2335,9 @@ function _razaoRcliSrc(empresa,ano){
 }
 // Builds {detailKey:{supplierLabel:[12months]}} from expense accounts in imported Razão records
 function _razaoFornSrc(empresa,ano){
+  const _ano=Number(ano);
   const res={};
-  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).forEach(conta=>{
       const dk=_RAZ_ACCT_DKEY[conta.code];if(!dk)return;
