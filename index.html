@@ -2292,6 +2292,29 @@ const _RAZ_ACCT_DKEY={
   '3.2.3.03.00005':'dtrib','3.2.3.03.00011':'dfin','3.2.2.01.00007':'dfin',
   '3.1.8.01.00012':'cspj','3.1.8.01.00004':'ccond','3.1.8.01.00005':'calug'
 };
+// Maps full legal names from Razão account descriptions → canonical short names used in 2024/2025
+const _RAZ_CLI_ALIAS={
+  'CENTRO EMPRESARIAL DEL PASEO':'C.E.D.P',
+  'LOJAS C & A':'LJS C&A','LOJAS C&A':'LJS C&A',
+  'CAIXA ECONOMICA FEDERAL':'CEF','CAIXA ECONÔMICA FEDERAL':'CEF',
+  'SJ ADMINISTRACAO DE IMOVEIS':'SJ ADM','SJ ADMINISTRAÇÃO DE IMÓVEIS':'SJ ADM',
+  'LOJAS AMERICANAS':'AMERICANAS','AMERICANAS S.A.':'AMERICANAS',
+  'SECRETARIA MUNICIPAL DE SAUDE':'SMS','SECRETARIA MUNICIPAL DE SAÚDE':'SMS',
+  'FIDUCIAL - IMOBILIARIA':'FIDUCIAL','FIDUCIAL IMOBILIARIA':'FIDUCIAL','FIDUCIAL - IMOBILIÁRIA':'FIDUCIAL',
+  'ALESSANDRO BELCHIOR ADM. DE IMOVEIS LTDA':'A. BELCHIOR','BELCHIOR ADM DE IMOVEIS':'A. BELCHIOR',
+  'VIBRA ENERGIA S.A.':'VIBRA ENERG','VIBRA ENERGIA SA':'VIBRA ENERG',
+  'ANCORA DISTRIBUIDORA LTDA':'ANCORA','ÂNCORA DISTRIBUIDORA LTDA':'ANCORA','ANCORA DIST LTDA':'ANCORA',
+  'CARCARA GESTAO DE RECURSOS LTDA':'CARCARA','CARCARÁ GESTÃO DE RECURSOS LTDA':'CARCARA',
+  'SHOPPING METRO SA':'SHOPPING METRO','CONDOMINIO SHOPPING METRO':'SHOPPING METRO',
+  'TAVARES E NOBRE SUPER':'TAVARES NOBRE SUPER',
+  'C ROLIM':'C ROLIM','FRANCISCO CHAGAS ROLIM':'C ROLIM',
+  '746 COMERCIO E SERVICOS LTDA':'746 COM','746 COM LTDA':'746 COM',
+  'RAIMUNDO JOSE VIANA':'RAIMUNDO J VIANA',
+  'FOUR FIT ACADEMIA LTDA':'FOUR FIT',
+  'NATALIA AGUIAR SUCUPIRA':'NATALIA AGUIAR',
+  'EFA ALIMENTOS LTDA':'EFA ALIMENTOS',
+};
+function _razAliasName(desc){return _RAZ_CLI_ALIAS[desc]||desc;}
 // Builds {clientName:[12months]} from AR accounts (1.1.2.xx) in imported Razão records
 function _razaoCliSrc(empresa,ano){
   const _ano=Number(ano);
@@ -2299,8 +2322,9 @@ function _razaoCliSrc(empresa,ano){
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
-      if(!res[conta.desc])res[conta.desc]=new Array(12).fill(0);
-      res[conta.desc][mi]+=(conta.deb||0);
+      const name=_razAliasName(conta.desc);
+      if(!res[name])res[name]=new Array(12).fill(0);
+      res[name][mi]+=(conta.deb||0);
     });
   });
   return res;
@@ -2312,7 +2336,8 @@ function _razaoRtypeSrc(empresa,ano){
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
-      const key=/metr[oô]/i.test(conta.desc)?'Lojas Metrô':'Locação';
+      const aname=_razAliasName(conta.desc);
+      const key=/metr[oô]/i.test(aname)||aname==='SHOPPING METRO'?'Lojas Metrô':'Locação';
       res[key][mi]+=(conta.deb||0);
     });
   });
@@ -2325,10 +2350,11 @@ function _razaoRcliSrc(empresa,ano){
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
-      if(!res[conta.desc])res[conta.desc]={fat:new Array(12).fill(0),rec:new Array(12).fill(0),sal:new Array(12).fill(0)};
-      res[conta.desc].fat[mi]+=(conta.deb||0);
-      res[conta.desc].rec[mi]+=(conta.cre||0);
-      res[conta.desc].sal[mi]=conta.su||0;
+      const name=_razAliasName(conta.desc);
+      if(!res[name])res[name]={fat:new Array(12).fill(0),rec:new Array(12).fill(0),sal:new Array(12).fill(0)};
+      res[name].fat[mi]+=(conta.deb||0);
+      res[name].rec[mi]+=(conta.cre||0);
+      res[name].sal[mi]=conta.su||0;
     });
   });
   return res;
