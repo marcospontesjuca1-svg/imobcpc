@@ -2277,6 +2277,46 @@ const RAZAO_DETAIL_MAP={
   irpj: {label:'Provisão IRPJ',                      type:'dref'},
 };
 
+// Maps Razão account codes → DRE detailKey (for dynamic 2026+ data from imported Razão)
+const _RAZ_ACCT_DKEY={
+  '3.2.3.04.00009':'dspj','3.2.3.04.00019':'dman','3.2.3.04.00028':'dvig',
+  '3.2.3.04.00026':'dasj','3.2.3.04.00020':'dmkt','3.2.3.04.00048':'dmkt',
+  '3.2.3.04.00024':'dvei','3.2.3.04.00021':'ddep','3.2.3.04.00016':'dcon',
+  '3.2.3.04.00027':'dsoft_inf','3.2.3.04.00033':'dsoft_inf','3.2.3.04.00062':'dsoft_inf',
+  '3.2.3.04.00052':'dout','3.2.3.03.00003':'dtrib','3.2.3.03.00004':'dvei',
+  '3.2.3.03.00005':'dtrib','3.2.3.03.00011':'dfin','3.2.2.01.00007':'dfin',
+  '3.1.8.01.00012':'cspj','3.1.8.01.00004':'ccond','3.1.8.01.00005':'calug'
+};
+// Builds {clientName:[12months]} from AR accounts (1.1.2.xx) in imported Razão records
+function _razaoCliSrc(empresa,ano){
+  const res={};
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+    const mi=rec.mes-1;
+    (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
+      if(!res[conta.desc])res[conta.desc]=new Array(12).fill(0);
+      res[conta.desc][mi]+=(conta.deb||0);
+    });
+  });
+  return res;
+}
+// Builds {detailKey:{supplierLabel:[12months]}} from expense accounts in imported Razão records
+function _razaoFornSrc(empresa,ano){
+  const res={};
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+    const mi=rec.mes-1;
+    (rec.contas||[]).forEach(conta=>{
+      const dk=_RAZ_ACCT_DKEY[conta.code];if(!dk)return;
+      if(!res[dk])res[dk]={};
+      (conta.lanc||[]).forEach(l=>{
+        const lbl=l.hist||'—';
+        if(!res[dk][lbl])res[dk][lbl]=new Array(12).fill(0);
+        res[dk][lbl][mi]+=(l.deb||0);
+      });
+    });
+  });
+  return res;
+}
+
 function openDreDetail(detailKey){
   const map=RAZAO_DETAIL_MAP[detailKey];
   if(!map||!_dreCols.length) return;
@@ -2302,7 +2342,8 @@ function openDreDetail(detailKey){
     let rows=[], rowLabel='Descrição';
     if(map.type==='forn'){
       rowLabel='Fornecedor / NF';
-      let raw;if(_ACTIVE_CO==='cpc'){raw=(map.src||{})[String(ano)]||{};}else{const esmSrc=detailKey==='dman'?{'2024':ESAM_RAZAO_FORN_MANUTENCAO_2024,'2025':ESAM_RAZAO_FORN_MANUTENCAO_2025}:detailKey==='dspj'?{'2024':ESAM_RAZAO_FORN_SERV_PJ_2024,'2025':ESAM_RAZAO_FORN_SERV_PJ_2025}:{};raw=(esmSrc[String(ano)])||{};}
+      const _fornCo=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
+      let raw;if(_ACTIVE_CO==='cpc'){raw=(map.src||{})[String(ano)]||((_razaoFornSrc('CPC',ano))[detailKey])||{};}else{const esmSrc=detailKey==='dman'?{'2024':ESAM_RAZAO_FORN_MANUTENCAO_2024,'2025':ESAM_RAZAO_FORN_MANUTENCAO_2025}:detailKey==='dspj'?{'2024':ESAM_RAZAO_FORN_SERV_PJ_2024,'2025':ESAM_RAZAO_FORN_SERV_PJ_2025}:{};raw=(esmSrc[String(ano)])||((_razaoFornSrc('ESAM',ano))[detailKey])||{};}
       rows=Object.entries(raw).map(([n,v])=>({name:n,vals:fIdx.map(i=>v[i]||0),total:fIdx.reduce((s,i)=>s+(v[i]||0),0)}))
         .filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
     } else if(map.type==='rfin'){
@@ -2312,7 +2353,7 @@ function openDreDetail(detailKey){
         .filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
     } else if(map.type==='cli'){
       rowLabel='Cliente';
-      const cliSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cliRaw=(cliSrc[String(ano)])||{};
+      const cliSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cliRaw=(cliSrc[String(ano)])||_razaoCliSrc(_ACTIVE_CO==='cpc'?'CPC':'ESAM',ano)||{};
       let entries=Object.entries(cliRaw);
       if(map.filter) entries=entries.filter(([c])=>map.filter(c));
       rows=entries.map(([n,v])=>({name:n,vals:fIdx.map(i=>v[i]||0),total:fIdx.reduce((s,i)=>s+(v[i]||0),0)}))
@@ -2378,11 +2419,12 @@ function razaoSetAno(ano, multiAnos){
     const anos=multiAnos;
     const colLbl=a=>mLbl==='Anual'?String(a):mLbl+' '+a;
     const apF=arr=>fIdx.reduce((s,mi)=>s+(arr[mi]||0),0);
+    const _coM=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
     const cliSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};
     const rfinSrcM=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
 
     const anoData=anos.map(a=>{
-      const cliA=cliSrc[String(a)]||{};
+      const cliA=cliSrc[String(a)]||_razaoCliSrc(_coM,a);
       const rfinA=rfinSrcM[String(a)]||{};
       const rfinRows=Object.entries(rfinA).map(([k,arr])=>({name:RFIN_LBL[k]||k,tot:apF(arr)})).filter(r=>r.tot>0);
       const totalFin=rfinRows.reduce((s,r)=>s+r.tot,0);
@@ -2447,7 +2489,7 @@ function razaoSetAno(ano, multiAnos){
   }
 
   // ── SINGLE-YEAR mode (original code) ─────────────────────────────────────
-  const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||{};
+  const _coS=_ACTIVE_CO==='cpc'?'CPC':'ESAM';const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||_razaoCliSrc(_coS,ano);
   const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};const rfin=(rfinSrc[String(ano)])||{};
   const perLabel=fM?fLbl.join(', '):ano;
   const ncols=fIdx.length;
@@ -3263,8 +3305,8 @@ function _parseRazao(rows){
     }else if(cur&&typeof row[0]==='number'&&row[0]>1&&c2&&c2!=='SALDO ANTERIOR'){
       const deb=parseFloat(String(row[8]||0).replace(',','.'))||0;
       const cre=parseFloat(String(row[9]||0).replace(',','.'))||0;
-      // Usa primeira linha do histórico (antes de \n) para exibição compacta
-      const hist=c2.split('\n')[0].trim().substring(0,60);
+      const histLines=c2.split('\n').map(l=>l.trim()).filter(Boolean);
+      const hist=(histLines.length>1?histLines[histLines.length-1]:histLines[0]||'').substring(0,80);
       if(deb||cre)cur.lanc.push({dt:_xlSerial2Date(row[0]),hist,deb,cre});
     }
   }
