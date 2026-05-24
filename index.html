@@ -1569,8 +1569,10 @@ function renderRec(){
   const perLabel=recAnos.length>1?mLbl+' — '+recAnos.join(' × '):(fM?mLbl+' '+recAnos[0]:String(recAnos[0]));
 
   // KPIs — per year when multi, single otherwise
+  const _rco=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
   const kpiData=recAnos.map(ano=>{
-    const rt=RTYPE[ano]||{},dreArr=(DREF[String(ano)]||{})['rb']||[];
+    const rt=RTYPE[ano]||_razaoRtypeSrc(_rco,ano);
+    const dreArr=(DREF[String(ano)]||{})['rb']||[];
     const apF=apY(ano);
     return{
       ano,
@@ -1592,7 +1594,7 @@ function renderRec(){
     ].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s neu">${k.s}</div></div>`).join('');
   } else {
     const k=kpiData[0];
-    const rc=RCLI[k.ano]||{};
+    const rc=Object.keys(RCLI[k.ano]||{}).length?RCLI[k.ano]:_razaoRcliSrc(_rco,k.ano);
     const apF=apY(k.ano);
     const tAR=Object.values(rc).reduce((s,c)=>s+apF(c.fat),0);
     const diffP=k.tTot?Math.abs((tAR-k.tTot)/k.tTot*100).toFixed(1):0;
@@ -2295,6 +2297,32 @@ function _razaoCliSrc(empresa,ano){
     (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
       if(!res[conta.desc])res[conta.desc]=new Array(12).fill(0);
       res[conta.desc][mi]+=(conta.deb||0);
+    });
+  });
+  return res;
+}
+// Builds RTYPE-compatible {'Locação':[12m],'Lojas Metrô':[12m]} from Razão AR accounts
+function _razaoRtypeSrc(empresa,ano){
+  const res={'Locação':new Array(12).fill(0),'Lojas Metrô':new Array(12).fill(0)};
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+    const mi=rec.mes-1;
+    (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
+      const key=/metr[oô]/i.test(conta.desc)?'Lojas Metrô':'Locação';
+      res[key][mi]+=(conta.deb||0);
+    });
+  });
+  return res;
+}
+// Builds RCLI-compatible {clientName:{fat:[12m],rec:[12m],sal:[12m]}} from Razão AR accounts
+function _razaoRcliSrc(empresa,ano){
+  const res={};
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===ano).forEach(rec=>{
+    const mi=rec.mes-1;
+    (rec.contas||[]).filter(c=>c.code.startsWith('1.1.2')).forEach(conta=>{
+      if(!res[conta.desc])res[conta.desc]={fat:new Array(12).fill(0),rec:new Array(12).fill(0),sal:new Array(12).fill(0)};
+      res[conta.desc].fat[mi]+=(conta.deb||0);
+      res[conta.desc].rec[mi]+=(conta.cre||0);
+      res[conta.desc].sal[mi]=conta.su||0;
     });
   });
   return res;
