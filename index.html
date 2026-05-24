@@ -3239,8 +3239,10 @@ function _parseRazao(rows){
   let empresa='CPC',mes=1,ano=new Date().getFullYear();
   for(let i=0;i<Math.min(8,rows.length);i++){
     const row=rows[i]||[];
-    for(let c=0;c<row.length-1;c++){
-      const k=String(row[c]||'').trim(),v=String(row[c+1]||'').trim();
+    for(let c=0;c<row.length;c++){
+      const k=String(row[c]||'').trim();
+      // Razão tem coluna vazia entre rótulo e valor: busca valor nas próximas 2 colunas
+      const v=String(row[c+1]||'').trim()||String(row[c+2]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
       if(k==='Período:'||k==='Periodo:'){const m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m){mes=parseInt(m[2]);ano=parseInt(m[3]);}}
     }
@@ -3261,7 +3263,9 @@ function _parseRazao(rows){
     }else if(cur&&typeof row[0]==='number'&&row[0]>1&&c2&&c2!=='SALDO ANTERIOR'){
       const deb=parseFloat(String(row[8]||0).replace(',','.'))||0;
       const cre=parseFloat(String(row[9]||0).replace(',','.'))||0;
-      if(deb||cre)cur.lanc.push({dt:_xlSerial2Date(row[0]),hist:c2.substring(0,55),deb,cre});
+      // Usa primeira linha do histórico (antes de \n) para exibição compacta
+      const hist=c2.split('\n')[0].trim().substring(0,60);
+      if(deb||cre)cur.lanc.push({dt:_xlSerial2Date(row[0]),hist,deb,cre});
     }
   }
   return{empresa,mes,ano,contas};
@@ -3269,11 +3273,17 @@ function _parseRazao(rows){
 
 function _saveRazaoResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  if(!parsed.contas.length){cfgFb('Razão detectado mas sem contas reconhecidas. Verifique o arquivo.','err');return;}
   razSaveRecord({empresa:parsed.empresa,ano:parsed.ano,mes:parsed.mes,contas:parsed.contas,filename,timestamp:Date.now()});
   razRenderList();
   const locTab=document.getElementById('tab-loc');if(locTab)locTab.style.display='';
   _init.loc=false;
-  cfgFb('Razão importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano,'ok');
+  cfgFb('Razão importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano+' · '+parsed.contas.length+' contas','ok');
+  // Navega para a aba Locatários automaticamente após o import
+  setTimeout(()=>{
+    closeSettings();
+    showPanel('loc',document.getElementById('tab-loc'));
+  },800);
 }
 
 function razRenderList(){
