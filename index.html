@@ -2314,7 +2314,13 @@ const _RAZ_CLI_ALIAS={
   'NATALIA AGUIAR SUCUPIRA':'NATALIA AGUIAR',
   'EFA ALIMENTOS LTDA':'EFA ALIMENTOS',
 };
-function _razAliasName(desc){return _RAZ_CLI_ALIAS[desc]||desc;}
+function _razAliasName(desc){
+  if(_RAZ_CLI_ALIAS[desc])return _RAZ_CLI_ALIAS[desc];
+  // Contas de inquilinos do Shopping Metrô: prefixo LJ (Loja) ou Q (Quiosque)
+  const d=desc.trim().toUpperCase();
+  if(/^LJ[\s\-\/]/.test(d)||/^Q[\s\-\/]/.test(d)||d==='CLIENTES LJ'||d==='CLIENTES Q')return 'SHOPPING METRO';
+  return desc;
+}
 // Builds {clientName:[12months]} from AR accounts (1.1.2.xx) in imported Razão records
 function _razaoCliSrc(empresa,ano){
   const _ano=Number(ano);
