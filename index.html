@@ -2624,10 +2624,9 @@ function razaoSetAno(ano, multiAnos){
   cliInt.forEach(c=>{const vals=fIdx.map(i=>cli[c][i]||0);html+=dataRow(c,vals,totals[c])});
   html+=subRow(fIdx.map(i=>cliInt.reduce((s,c)=>s+(cli[c][i]||0),0)),totalInt);
 
-  // Total geral — soma apenas clientes visíveis na tabela (garante gtVals = soma dos subtotais)
-  const allVis=[...cliAgrp,...cliInt];
-  const gtVals=fIdx.map((mi,j)=>rfinRows.reduce((s,r)=>s+r.vals[j],0)+allVis.reduce((s,c)=>s+(cli[c][mi]||0),0));
-  html+=`<tr class="ch"><td>TOTAL GERAL</td>${gtVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
+  // Total geral — usa valores mensais do DRE (dreRbArr2) para bater exatamente com a Receita Bruta
+  const dreMonthVals=fIdx.map(i=>dreRbArr2[i]||0);
+  html+=`<tr class="ch"><td>TOTAL GERAL</td>${dreMonthVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
 
   document.getElementById('t-razao-cli').innerHTML=html;
 
