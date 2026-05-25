@@ -3102,7 +3102,7 @@ function applyUploads(){
   Object.keys(_init).forEach(k=>{_init[k]=false;});
 }
 
-// Aplica uploads salvos ao carregar a página; restaura da nuvem se localStorage vazio
+// Aplica uploads salvos ao carregar a página
 (function(){
   try{applyUploads();}catch(e){console.warn('applyUploads init:',e);}
   try{
@@ -3111,8 +3111,9 @@ function applyUploads(){
       if(locTab)locTab.style.display='';
     }
   }catch(e){}
-  _initFromCloud().catch(()=>{});
 })();
+// Restaura/sincroniza da nuvem após DOM pronto
+window.addEventListener('load',()=>{_initFromCloud().catch(()=>{});});
 
 // ─── Drag & Drop ───
 function upDrag(e,on){
@@ -3563,17 +3564,28 @@ function _cloudSt(msg,type){
   el.textContent=msg;el.className='cloud-status '+type;el.style.display='block';
 }
 
+function _fbMerge(local,cloud,keyFn){
+  // Merge two arrays keeping the record with higher timestamp for each key
+  const map=new Map();
+  [...(cloud||[]),...(local||[])].forEach(r=>{
+    const k=keyFn(r);const ex=map.get(k);
+    if(!ex||(r.timestamp||0)>=(ex.timestamp||0))map.set(k,r);
+  });
+  return [...map.values()];
+}
+
 async function _autoSyncToCloud(){
   const url=_fbUrl();if(!url)return;
   const sec=localStorage.getItem('imobcpc_firebase_secret')||'';
   const auth=sec?'?auth='+encodeURIComponent(sec):'';
   const base=url.replace(/\/+$/,'');
   try{
-    await Promise.all([
+    const [r1,r2]=await Promise.all([
       fetch(base+'/imobcpc_uploads.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(upGetAll())}),
       fetch(base+'/imobcpc_razao.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(razGetAll())})
     ]);
-    localStorage.setItem('imobcpc_last_sync',new Date().toLocaleString('pt-BR'));
+    if(r1.ok&&r2.ok)localStorage.setItem('imobcpc_last_sync',new Date().toLocaleString('pt-BR'));
+    else console.warn('auto-sync parcial:',r1.status,r2.status);
   }catch(e){console.warn('auto-sync:',e);}
 }
 
@@ -3583,12 +3595,29 @@ async function _initFromCloud(){
   const auth=sec?'?auth='+encodeURIComponent(sec):'';
   const base=url.replace(/\/+$/,'');
   try{
-    const hasUp=upGetAll().length>0, hasRaz=razGetAll().length>0;
-    if(hasUp&&hasRaz)return;
-    const reqs=[];
-    if(!hasUp)reqs.push(fetch(base+'/imobcpc_uploads.json'+auth).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d)&&d.length){upSaveAll(d);applyUploads();upRenderList();}}));
-    if(!hasRaz)reqs.push(fetch(base+'/imobcpc_razao.json'+auth).then(r=>r.ok?r.json():null).then(d=>{if(d&&Array.isArray(d)&&d.length){razSaveAll(d);razRenderList();const t=document.getElementById('tab-loc');if(t)t.style.display='';}}));
-    await Promise.all(reqs);
+    const [r1,r2]=await Promise.all([
+      fetch(base+'/imobcpc_uploads.json'+auth).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(base+'/imobcpc_razao.json'+auth).then(r=>r.ok?r.json():null).catch(()=>null)
+    ]);
+    let changed=false;
+    if(r1&&Array.isArray(r1)&&r1.length){
+      const merged=_fbMerge(upGetAll(),r1,u=>u.empresa+'|'+u.tipo+'|'+u.ano);
+      if(merged.length>upGetAll().length){upSaveAll(merged);applyUploads();upRenderList();changed=true;}
+    }
+    if(r2&&Array.isArray(r2)&&r2.length){
+      const merged=_fbMerge(razGetAll(),r2,r=>r.empresa+'|'+r.ano+'|'+r.mes);
+      if(merged.length>razGetAll().length){
+        razSaveAll(merged);razRenderList();
+        const t=document.getElementById('tab-loc');if(t)t.style.display='';
+        changed=true;
+      }
+    }
+    if(changed){
+      // Re-render active tab
+      try{const ap=document.querySelector('.panel.active');if(ap&&ap.id==='panel-rec')renderRecInit();}catch(_){}
+      const lsEl=document.getElementById('cfg-last-sync');
+      if(lsEl)lsEl.textContent='Última sincronização: '+new Date().toLocaleString('pt-BR');
+    }
   }catch(e){console.warn('init-from-cloud:',e);}
 }
 
