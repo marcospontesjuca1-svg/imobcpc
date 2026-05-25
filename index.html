@@ -2116,6 +2116,29 @@ const CPC_RAZAO_CLI_2024 = {
   "OUTLED": [0,0,0,0,0,0,4147.5,0,0,0,4364.22,0],
   "VP CAPITAL": [0,0,0,0,0,0,0,0,0,1912.35,1912.35,1959.5]
 };
+// Mapeamento conta 1.1.1.03.xx → label fundo (para extração RFIN do Razão 2026+)
+const _RAZ_RFIN_ACCT={
+  '1.1.1.03.00002':'Bradesco FIC',
+  '1.1.1.03.00008':'CEF FIC Ref DI',
+  '1.1.1.03.00010':'Bradesco FIC',
+  '1.1.1.03.00016':'Bradesco FIC',
+  '1.1.1.03.00017':'Bradesco FIC',
+  '1.1.1.03.00018':'Bradesco FIC',
+  '1.1.1.03.00019':'Santander',
+};
+function _razaoRfinSrc(empresa,ano){
+  const _ano=Number(ano);const res={};
+  razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
+    const mi=rec.mes-1;
+    (rec.contas||[]).forEach(conta=>{
+      const lbl=_RAZ_RFIN_ACCT[conta.code];if(!lbl)return;
+      if(!res[lbl])res[lbl]=new Array(12).fill(0);
+      res[lbl][mi]+=(conta.deb||0);
+    });
+  });
+  return res;
+}
+
 const CPC_RAZAO_RFIN_2024 = {
   "RFIN_APLIC":    [30162.2,63044.94,16502.88,54617.39,173549.83,28989.75,154802.44,12255,76741.61,93843.28,134246.22,230502.3],
   "RFIN_XP":       [0,0,0,0,15442.29,26485.54,56513.38,67950.45,70504.19,76105.14,69591.86,48274.82],
@@ -2417,7 +2440,9 @@ function openDreDetail(detailKey){
         .filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
     } else if(map.type==='rfin'){
       rowLabel='Fundo';
-      const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};const rfin=(rfinSrc[String(ano)])||{};
+      const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
+      const _rfinCo=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
+      const rfin=(rfinSrc[String(ano)])||_razaoRfinSrc(_rfinCo,ano)||{};
       rows=Object.entries(rfin).map(([k,v])=>({name:RFIN_LBL[k]||k,vals:fIdx.map(i=>v[i]||0),total:fIdx.reduce((s,i)=>s+(v[i]||0),0)}))
         .filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
     } else if(map.type==='cli'){
@@ -2494,7 +2519,8 @@ function razaoSetAno(ano, multiAnos){
 
     const anoData=anos.map(a=>{
       const cliA=cliSrc[String(a)]||_razaoCliSrc(_coM,a);
-      const rfinA=rfinSrcM[String(a)]||{};
+      const _rfinCoM=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
+      const rfinA=rfinSrcM[String(a)]||_razaoRfinSrc(_rfinCoM,a)||{};
       let rfinRows=Object.entries(rfinA).map(([k,arr])=>({name:RFIN_LBL[k]||k,tot:apF(arr)})).filter(r=>r.tot>0);
       // Fallback: se não há detalhe por fundo, usa total do DREF rfin
       if(!rfinRows.length){const dRfin=(DREF[String(a)]||{})['rfin']||[];const t=apF(dRfin);if(t>0)rfinRows=[{name:'Receitas Financeiras',tot:t}];}
@@ -2561,7 +2587,8 @@ function razaoSetAno(ano, multiAnos){
 
   // ── SINGLE-YEAR mode (original code) ─────────────────────────────────────
   const _coS=_ACTIVE_CO==='cpc'?'CPC':'ESAM';const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||_razaoCliSrc(_coS,ano);
-  const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};const rfin=(rfinSrc[String(ano)])||{};
+  const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
+  const rfin=(rfinSrc[String(ano)])||_razaoRfinSrc(_coS,ano)||{};
   const perLabel=fM?fLbl.join(', '):ano;
   const ncols=fIdx.length;
 
