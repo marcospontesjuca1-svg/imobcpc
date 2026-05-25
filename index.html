@@ -951,7 +951,7 @@ function renderBP(){
   if(bpModo==='ano'){
     [...bpAnosSelected].sort().forEach(ano=>{
       const d=BP_DATA[String(ano)];
-      if(d){const lmi=_bpLastMi(d);const lbl=lmi===11?String(ano):MN[lmi]+'/'+ano;cols.push({label:lbl,ano,lmi,val:(key)=>d[key]?d[key][lmi]:0});}
+      if(d){const lmi=_bpLastMi(d);cols.push({label:String(ano),ano,lmi,val:(key)=>d[key]?d[key][lmi]:0});}
     });
   } else {
     const anosM=[..._fsb.anos].sort();
@@ -1087,7 +1087,7 @@ function renderBP(){
       if(hasSubs&&isExp){
         BP_META.sub_keys[key].forEach((subKey,si)=>{
           const subDesc=BP_META.subs[key][si][1];
-          const sVals=cols.map(c=>{const d=BP_DATA[String(c.ano)];const mi=bpModo==='ano'?11:(c.mi!=null?c.mi:11);return d&&d[subKey]?d[subKey][mi]:0;});
+          const sVals=cols.map(c=>{const d=BP_DATA[String(c.ano)];const mi=bpModo==='ano'?(c.lmi!=null?c.lmi:11):(c.mi!=null?c.mi:11);return d&&d[subKey]?d[subKey][mi]:0;});
           const sZero=sVals.every(v=>Math.abs(v)<0.5);
           if(sZero) return;
           let srow=`<tr style="${secStyle['child']}"><td style="padding-left:38px;position:sticky;left:0;background:inherit;z-index:1">↳ ${subDesc}</td>`;
@@ -1102,7 +1102,7 @@ function renderBP(){
 
   document.getElementById('t-bp').innerHTML=thead+tbody;
   const tit=bpModo==='ano'
-    ?'Balanço Patrimonial — '+cols.map(c=>c.label).join(' × ')+(cols.length&&cols[0].lmi===11?' (posição Dezembro)':'')
+    ?'Balanço Patrimonial — '+cols.map(c=>c.label).join(' × ')+(cols.length?(()=>{const nd=cols.filter(c=>c.lmi!==11);return nd.length===0?' (posição Dezembro)':' (posição '+nd.map(c=>MN[c.lmi]+'/'+c.ano).join(', ')+')'})():'')
     :(()=>{const anosL=[..._fsb.anos].sort();const ms=[...bpMesSelected].sort((a,b)=>a-b);const mLbl=_mesRangeLabel(ms);return 'Balanço Patrimonial — '+(anosL.length>1?mLbl+' — '+anosL.join(' × '):mLbl+' '+anosL[0]);})();
   document.getElementById('bp-ttbl').textContent=tit;
 }
