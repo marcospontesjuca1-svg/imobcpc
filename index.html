@@ -2330,7 +2330,7 @@ const _RAZ_CLI_ALIAS={
   'CARCARA GESTAO DE RECURSOS LTDA':'CARCARA','CARCARÁ GESTÃO DE RECURSOS LTDA':'CARCARA',
   'SHOPPING METRO SA':'SHOPPING METRO','CONDOMINIO SHOPPING METRO':'SHOPPING METRO',
   'TAVARES E NOBRE SUPER':'TAVARES NOBRE SUPER',
-  'C ROLIM':'C ROLIM','FRANCISCO CHAGAS ROLIM':'C ROLIM',
+  'C ROLIM':'C ROLIM','FRANCISCO CHAGAS ROLIM':'C ROLIM','ALESSANDRA SALES ROLIM':'C ROLIM',
   '746 COMERCIO E SERVICOS LTDA':'746 COM','746 COM LTDA':'746 COM',
   'RAIMUNDO JOSE VIANA':'RAIMUNDO J VIANA',
   'FOUR FIT ACADEMIA LTDA':'FOUR FIT',
@@ -2446,8 +2446,7 @@ function openDreDetail(detailKey){
     } else if(map.type==='rfin'){
       rowLabel='Fundo';
       const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
-      const _rfinCo=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
-      const rfin=(rfinSrc[String(ano)])||_razaoRfinSrc(_rfinCo,ano)||{};
+      const rfin=(rfinSrc[String(ano)])||{};
       rows=Object.entries(rfin).map(([k,v])=>({name:RFIN_LBL[k]||k,vals:fIdx.map(i=>v[i]||0),total:fIdx.reduce((s,i)=>s+(v[i]||0),0)}))
         .filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
     } else if(map.type==='cli'){
@@ -2524,8 +2523,10 @@ function razaoSetAno(ano, multiAnos){
 
     const anoData=anos.map(a=>{
       const cliA=cliSrc[String(a)]||_razaoCliSrc(_coM,a);
-      const _rfinCoM=_ACTIVE_CO==='cpc'?'CPC':'ESAM';
-      const rfinA=rfinSrcM[String(a)]||_razaoRfinSrc(_rfinCoM,a)||{};
+      // SHOPPING METRO usa DRE 'metro' como fonte autoritativa
+      const dreMetroAM=(DREF[String(a)]||{})['metro']||[];
+      if(dreMetroAM.some(v=>v>0))cliA['SHOPPING METRO']=dreMetroAM;
+      const rfinA=rfinSrcM[String(a)]||{};
       let rfinRows=Object.entries(rfinA).map(([k,arr])=>({name:RFIN_LBL[k]||k,tot:apF(arr)})).filter(r=>r.tot>0);
       // Fallback: se não há detalhe por fundo, usa total do DREF rfin
       if(!rfinRows.length){const dRfin=(DREF[String(a)]||{})['rfin']||[];const t=apF(dRfin);if(t>0)rfinRows=[{name:'Receitas Financeiras',tot:t}];}
@@ -2592,8 +2593,11 @@ function razaoSetAno(ano, multiAnos){
 
   // ── SINGLE-YEAR mode (original code) ─────────────────────────────────────
   const _coS=_ACTIVE_CO==='cpc'?'CPC':'ESAM';const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||_razaoCliSrc(_coS,ano);
+  // SHOPPING METRO usa DRE 'metro' como fonte autoritativa
+  const dreMetroArrS=(DREF[String(ano)]||{})['metro']||[];
+  if(dreMetroArrS.some(v=>v>0))cli['SHOPPING METRO']=dreMetroArrS;
   const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
-  const rfin=(rfinSrc[String(ano)])||_razaoRfinSrc(_coS,ano)||{};
+  const rfin=(rfinSrc[String(ano)])||{};
   const perLabel=fM?fLbl.join(', '):ano;
   const ncols=fIdx.length;
 
