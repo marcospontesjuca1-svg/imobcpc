@@ -2116,24 +2116,23 @@ const CPC_RAZAO_CLI_2024 = {
   "OUTLED": [0,0,0,0,0,0,4147.5,0,0,0,4364.22,0],
   "VP CAPITAL": [0,0,0,0,0,0,0,0,0,1912.35,1912.35,1959.5]
 };
-// Mapeamento conta 1.1.1.03.xx → label fundo (para extração RFIN do Razão 2026+)
-const _RAZ_RFIN_ACCT={
-  '1.1.1.03.00002':'Bradesco FIC',
-  '1.1.1.03.00008':'CEF FIC Ref DI',
-  '1.1.1.03.00010':'Bradesco FIC',
-  '1.1.1.03.00016':'Bradesco FIC',
-  '1.1.1.03.00017':'Bradesco FIC',
-  '1.1.1.03.00018':'Bradesco FIC',
-  '1.1.1.03.00019':'Santander',
-};
+// Extrai RFIN do Razão usando conta 3.2.2 (Receitas Financeiras — créditos = receita reconhecida)
 function _razaoRfinSrc(empresa,ano){
   const _ano=Number(ano);const res={};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
-    (rec.contas||[]).forEach(conta=>{
-      const lbl=_RAZ_RFIN_ACCT[conta.code];if(!lbl)return;
+    (rec.contas||[]).filter(c=>c.code.startsWith('3.2.2')).forEach(conta=>{
+      const d=(conta.desc||'').toUpperCase();
+      let lbl;
+      if(/BRADESCO/i.test(d))lbl='Bradesco FIC';
+      else if(/\bXP\b/i.test(d))lbl='XP Investimentos';
+      else if(/MAXI/i.test(d))lbl='CEF FIC Maxi';
+      else if(/GIRO/i.test(d))lbl='CEF FIC Giro';
+      else if(/CEF|CAIXA\s+ECON/i.test(d))lbl='CEF FIC Ref DI';
+      else if(/SANTANDER/i.test(d))lbl='Santander';
+      else lbl=conta.desc?.trim()||'Receitas Financeiras';
       if(!res[lbl])res[lbl]=new Array(12).fill(0);
-      res[lbl][mi]+=(conta.deb||0);
+      res[lbl][mi]+=(conta.cre||0);
     });
   });
   return res;
@@ -2528,7 +2527,7 @@ function razaoSetAno(ano, multiAnos){
       // SHOPPING METRO usa DRE 'metro' como fonte autoritativa
       const dreMetroAM=(DREF[String(a)]||{})['metro']||[];
       if(dreMetroAM.some(v=>v>0))cliA['SHOPPING METRO']=dreMetroAM;
-      const rfinA=rfinSrcM[String(a)]||{};
+      const rfinA=rfinSrcM[String(a)]||_razaoRfinSrc(_coM,a)||{};
       let rfinRows=Object.entries(rfinA).map(([k,arr])=>({name:RFIN_LBL[k]||k,tot:apF(arr)})).filter(r=>r.tot>0);
       // Fallback: se não há detalhe por fundo, usa total do DREF rfin
       if(!rfinRows.length){const dRfin=(DREF[String(a)]||{})['rfin']||[];const t=apF(dRfin);if(t>0)rfinRows=[{name:'Receitas Financeiras',tot:t}];}
@@ -2599,7 +2598,7 @@ function razaoSetAno(ano, multiAnos){
   const dreMetroArrS=(DREF[String(ano)]||{})['metro']||[];
   if(dreMetroArrS.some(v=>v>0))cli['SHOPPING METRO']=dreMetroArrS;
   const rfinSrc=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_RFIN_2024,'2025':CPC_RAZAO_RFIN_2025}:{'2024':ESAM_RAZAO_RFIN_2024,'2025':ESAM_RAZAO_RFIN_2025};
-  const rfin=(rfinSrc[String(ano)])||{};
+  const rfin=(rfinSrc[String(ano)])||_razaoRfinSrc(_coS,ano)||{};
   const perLabel=fM?fLbl.join(', '):ano;
   const ncols=fIdx.length;
 
