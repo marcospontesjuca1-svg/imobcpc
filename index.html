@@ -2340,7 +2340,7 @@ const _RAZ_CLI_ALIAS={
   'LOJA METRÔ':'SHOPPING METRO','LOJA METRO':'SHOPPING METRO',
 };
 // Contas não-clientes a excluir dos intervalos 1.1.2/1.1.3
-const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b/i;
+const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b/i;
 const _isCliConta=c=>(c.code.startsWith('1.1.2')||c.code.startsWith('1.1.3'))&&!_NON_CLI_RE.test(c.desc);
 function _razAliasName(desc){
   const dN=desc.trim().normalize('NFC');
@@ -2351,30 +2351,31 @@ function _razAliasName(desc){
   return dN;
 }
 // Builds {clientName:[12months]} from revenue account 3.1.1.02.xx (Receita Prestação Serviços)
-// Uses CREDIT side (cre) — revenue accounts increase via credits
+// Builds {clientName:[12months]} from AR accounts 1.1.2/1.1.3 (debit = billing)
+// Per-client revenue comes from AR since 3.1.1.02 is a single aggregated account in 2026 Razão
 function _razaoCliSrc(empresa,ano){
   const _ano=Number(ano);
   const res={};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
-    (rec.contas||[]).filter(c=>c.code.startsWith('3.1.1.02')).forEach(conta=>{
+    (rec.contas||[]).filter(_isCliConta).forEach(conta=>{
       const name=_razAliasName(conta.desc);
       if(!res[name])res[name]=new Array(12).fill(0);
-      res[name][mi]+=(conta.cre||0);
+      res[name][mi]+=(conta.deb||0);
     });
   });
   return res;
 }
-// Builds RTYPE-compatible {'Locação':[12m],'Lojas Metrô':[12m]} from 3.1.1.02.xx revenue accounts
+// Builds RTYPE-compatible {'Locação':[12m],'Lojas Metrô':[12m]} from AR accounts 1.1.2/1.1.3
 function _razaoRtypeSrc(empresa,ano){
   const _ano=Number(ano);
   const res={'Locação':new Array(12).fill(0),'Lojas Metrô':new Array(12).fill(0)};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
     const mi=rec.mes-1;
-    (rec.contas||[]).filter(c=>c.code.startsWith('3.1.1.02')).forEach(conta=>{
+    (rec.contas||[]).filter(_isCliConta).forEach(conta=>{
       const aname=_razAliasName(conta.desc);
       const key=/metr[oô]/i.test(aname)||aname==='SHOPPING METRO'?'Lojas Metrô':'Locação';
-      res[key][mi]+=(conta.cre||0);
+      res[key][mi]+=(conta.deb||0);
     });
   });
   return res;
