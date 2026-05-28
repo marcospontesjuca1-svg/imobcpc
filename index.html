@@ -2340,14 +2340,16 @@ const _RAZ_CLI_ALIAS={
   'LOJA METRÔ':'SHOPPING METRO','LOJA METRO':'SHOPPING METRO',
 };
 // Contas não-clientes a excluir dos intervalos 1.1.2/1.1.3
-const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b/i;
+const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b|^RUA\s|^AV\.?\s|^AVENIDA\s|^TRAVESSA\s|^ALAMEDA\s|^ESTRADA\s|^ROD\.?\s|^LOTE\s|^N[°º]\s|\bN[°º]\s*\d/i;
 const _isCliConta=c=>(c.code.startsWith('1.1.2')||c.code.startsWith('1.1.3'))&&!_NON_CLI_RE.test(c.desc);
 function _razAliasName(desc){
   const dN=desc.trim().normalize('NFC');
+  const dU=dN.toUpperCase();
   if(_RAZ_CLI_ALIAS[dN])return _RAZ_CLI_ALIAS[dN];
-  const d=dN.toUpperCase();
-  if(/^CLIENTES/.test(d))return 'SHOPPING METRO';
-  if(/^LJ[\s\-\/]/.test(d)||/^Q[\s\-\/]/.test(d)||/METR[OÔ]/.test(d)||/LOJA\s*METR/i.test(d)||/RECEITA.*METR/i.test(d))return 'SHOPPING METRO';
+  if(_RAZ_CLI_ALIAS[dU])return _RAZ_CLI_ALIAS[dU];
+  if(/^CLIENTES/.test(dU))return 'SHOPPING METRO';
+  if(/PISO\s*\d|PISO\s+[A-Z]|PAVIMENTO|[AÁ]REA\s+COMUM/i.test(dN))return 'SHOPPING METRO';
+  if(/^LJ[\s\-\/]/.test(dU)||/^Q[\s\-\/]/.test(dU)||/METR[OÔ]/.test(dU)||/LOJA\s*METR/i.test(dN)||/RECEITA.*METR/i.test(dN))return 'SHOPPING METRO';
   return dN;
 }
 // Builds {clientName:[12months]} from revenue account 3.1.1.02.xx (Receita Prestação Serviços)
@@ -2533,9 +2535,12 @@ function razaoSetAno(ano, multiAnos){
       // Fallback: se não há detalhe por fundo, usa total do DREF rfin
       if(!rfinRows.length){const dRfin=(DREF[String(a)]||{})['rfin']||[];const t=apF(dRfin);if(t>0)rfinRows=[{name:'Receitas Financeiras',tot:t}];}
       const totalFin=rfinRows.reduce((s,r)=>s+r.tot,0);
-      const totals={};Object.keys(cliA).forEach(c=>{totals[c]=apF(cliA[c])});
       const dreArr=(DREF[String(a)]||{})['rb']||[];
-      const recBruta=fIdx.reduce((s,i)=>s+(dreArr[i]||0),0)||Object.values(totals).reduce((s,v)=>s+v,0)+totalFin;
+      const _rbDREa=fIdx.reduce((s,i)=>s+(dreArr[i]||0),0);
+      // Normalização: escala clientes não-metro para soma = rb(DRE) − rfin − metro
+      {const _mT=apF(cliA['SHOPPING METRO']||[]);const _tgt=Math.max(0,_rbDREa-totalFin-_mT);const _nmK=Object.keys(cliA).filter(c=>c!=='SHOPPING METRO');const _rNM=_nmK.reduce((s,c)=>s+apF(cliA[c]),0);if(_rNM>0&&_tgt>=0){const _sf=_tgt/_rNM;_nmK.forEach(c=>{cliA[c]=cliA[c].map(v=>v*_sf);});}}
+      const totals={};Object.keys(cliA).forEach(c=>{totals[c]=apF(cliA[c])});
+      const recBruta=_rbDREa||Object.values(totals).reduce((s,v)=>s+v,0)+totalFin;
       return{cliA,rfinRows,totalFin,totals,recBruta};
     });
 
@@ -2609,6 +2614,11 @@ function razaoSetAno(ano, multiAnos){
   if(!rfinRows.length){const dRfinArr=(DREF[String(ano)]||{})['rfin']||[];const dRfinVals=fIdx.map(i=>dRfinArr[i]||0);if(dRfinVals.some(v=>v>0))rfinRows=[{name:'Receitas Financeiras',vals:dRfinVals}];}
   const totalFin=rfinRows.reduce((s,r)=>s+r.vals.reduce((a,b)=>a+b,0),0);
 
+  // ── Normalização: escala clientes não-metro para soma = rb(DRE) − rfin − metro ──
+  const dreRbArr2=(DREF[String(ano)]||{})['rb']||[];
+  const _rbDRE=fIdx.reduce((s,i)=>s+(dreRbArr2[i]||0),0);
+  {const _mT=fIdx.reduce((s,i)=>s+(cli['SHOPPING METRO']?.[i]||0),0);const _tgt=Math.max(0,_rbDRE-totalFin-_mT);const _nmK=Object.keys(cli).filter(c=>c!=='SHOPPING METRO');const _rNM=_nmK.reduce((s,c)=>s+fIdx.reduce((ss,i)=>ss+(cli[c][i]||0),0),0);if(_rNM>0&&_tgt>=0){const _sf=_tgt/_rNM;_nmK.forEach(c=>{cli[c]=cli[c].map(v=>v*_sf);});}}
+
   // ── Grupo 2: Clientes Agrupados ──
   const clients=Object.keys(cli);
   const totals={};
@@ -2622,9 +2632,7 @@ function razaoSetAno(ano, multiAnos){
   const totalInt=cliInt.reduce((s,c)=>s+totals[c],0);
 
   const razaoTotal=totalFin+totalAgrp+totalInt;
-  // Receita Bruta = mesma base da DRE (DREF['rb']), para os dois tabs baterem
-  const dreRbArr2=(DREF[String(ano)]||{})['rb']||[];
-  const recBruta=fIdx.reduce((s,i)=>s+(dreRbArr2[i]||0),0)||razaoTotal;
+  const recBruta=_rbDRE||razaoTotal;
   const pct=v=>recBruta?(v/recBruta*100).toFixed(1)+'%':'—';
 
   // ── KPIs ──
@@ -2662,8 +2670,8 @@ function razaoSetAno(ano, multiAnos){
   cliInt.forEach(c=>{const vals=fIdx.map(i=>cli[c][i]||0);html+=dataRow(c,vals,totals[c])});
   html+=subRow(fIdx.map(i=>cliInt.reduce((s,c)=>s+(cli[c][i]||0),0)),totalInt);
 
-  // Total geral — usa valores mensais do DRE (dreRbArr2) para bater exatamente com a Receita Bruta
-  const dreMonthVals=fIdx.map(i=>dreRbArr2[i]||0);
+  // Total geral = soma dos três grupos por mês (após normalização bate com recBruta)
+  const dreMonthVals=fIdx.map((mi,j)=>rfinRows.reduce((s,r)=>s+r.vals[j],0)+cliAgrp.reduce((s,c)=>s+(cli[c][mi]||0),0)+cliInt.reduce((s,c)=>s+(cli[c][mi]||0),0));
   html+=`<tr class="ch"><td>TOTAL GERAL</td>${dreMonthVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
 
   document.getElementById('t-razao-cli').innerHTML=html;
