@@ -2350,6 +2350,7 @@ function _razAliasName(desc){
   if(/^CLIENTES/.test(dU))return 'SHOPPING METRO';
   if(/PISO\s*\d|PISO\s+[A-Z]|PAVIMENTO|[AÁ]REA\s+COMUM/i.test(dN))return 'SHOPPING METRO';
   if(/^LJ[\s\-\/]/.test(dU)||/^Q[\s\-\/]/.test(dU)||/METR[OÔ]/.test(dU)||/LOJA\s*METR/i.test(dN)||/RECEITA.*METR/i.test(dN))return 'SHOPPING METRO';
+  if(/\bROLIM\b/i.test(dN))return 'C ROLIM';
   return dN;
 }
 // Builds {clientName:[12months]} from revenue account 3.1.1.02.xx (Receita Prestação Serviços)
