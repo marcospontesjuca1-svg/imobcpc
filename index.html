@@ -2340,7 +2340,7 @@ const _RAZ_CLI_ALIAS={
   'LOJA METRÔ':'SHOPPING METRO','LOJA METRO':'SHOPPING METRO',
 };
 // Contas não-clientes a excluir dos intervalos 1.1.2/1.1.3
-const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b|^RUA\s|^AV\.?\s|^AVENIDA\s|^TRAVESSA\s|^ALAMEDA\s|^ESTRADA\s|^ROD\.?\s|^LOTE\s|^N[°º]\s|\bN[°º]\s*\d/i;
+const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b|^RUA\s|^AV\.?\s|^AVENIDA\s|^TRAVESSA\s|^ALAMEDA\s|^ESTRADA\s|^ROD\.?\s|^LOTE\s|^N[°º]\s|\bN[°º]\s*\d|ALESSANDRA\s+SALES\s+ROLIM/i;
 const _isCliConta=c=>(c.code.startsWith('1.1.2')||c.code.startsWith('1.1.3'))&&!_NON_CLI_RE.test(c.desc);
 function _razAliasName(desc){
   const dN=desc.trim().normalize('NFC');
@@ -2350,7 +2350,6 @@ function _razAliasName(desc){
   if(/^CLIENTES/.test(dU))return 'SHOPPING METRO';
   if(/PISO\s*\d|PISO\s+[A-Z]|PAVIMENTO|[AÁ]REA\s+COMUM/i.test(dN))return 'SHOPPING METRO';
   if(/^LJ[\s\-\/]/.test(dU)||/^Q[\s\-\/]/.test(dU)||/METR[OÔ]/.test(dU)||/LOJA\s*METR/i.test(dN)||/RECEITA.*METR/i.test(dN))return 'SHOPPING METRO';
-  if(/\bROLIM\b/i.test(dN))return 'C ROLIM';
   return dN;
 }
 // Builds {clientName:[12months]} from revenue account 3.1.1.02.xx (Receita Prestação Serviços)
