@@ -2032,8 +2032,9 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.ge
         </div>
         <div class="cfg-label">Balancetes Importados (<span id="up-count">0</span>)</div>
         <div class="up-list" id="up-list"><div class="up-empty">Nenhum dado importado</div></div>
-        <div class="cfg-label" style="margin-top:12px">Razão Importado (<span id="raz-count">0</span>)</div>
+        <div class="cfg-label" style="margin-top:12px">Razão Importado (<span id="raz-count">0</span>) <button onclick="razDiag()" style="font-size:10px;padding:2px 8px;margin-left:8px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer">Diagnóstico 3.1.1.02</button></div>
         <div class="up-list" id="raz-list"><div class="up-empty">Nenhum Razão importado</div></div>
+        <pre id="raz-diag" style="display:none;font-size:10px;background:#f8f8f8;border:1px solid #ddd;border-radius:6px;padding:10px;margin-top:8px;max-height:300px;overflow:auto;white-space:pre-wrap"></pre>
       </div>
 
       <!-- TAB: Nuvem (Firebase Sync) -->
@@ -3380,6 +3381,24 @@ function upExportJSON(){
 // ═══════════════ RAZÃO CONTÁBIL ═══════════════
 
 function razGetAll(){return JSON.parse(localStorage.getItem('imobcpc_razao')||'[]');}
+function razDiag(){
+  const el=document.getElementById('raz-diag');if(!el)return;
+  const all=razGetAll();
+  let out='=== Razão armazenado: '+all.length+' registros ===\n';
+  all.forEach(r=>{
+    out+='\n['+r.empresa+' '+r.mes+'/'+r.ano+'] '+r.contas.length+' contas\n';
+    const c=r.contas.find(c=>c.code.startsWith('3.1.1.02')||c.code==='3.1.1');
+    if(c){
+      out+='  conta '+c.code+' "'+c.desc+'" deb='+c.deb+' cre='+c.cre+' lanc='+c.lanc.length+'\n';
+      c.lanc.slice(0,10).forEach(l=>out+='    '+l.dt+' cre='+l.cre+' deb='+l.deb+' hist="'+l.hist+'"\n');
+      if(c.lanc.length>10)out+='    ... +'+(c.lanc.length-10)+' mais\n';
+    } else {
+      const codes=r.contas.filter(c=>c.code.startsWith('3.')).map(c=>c.code+':'+c.desc.substring(0,30)).join(', ');
+      out+='  SEM conta 3.1.1.02. Contas 3.x: '+codes+'\n';
+    }
+  });
+  el.textContent=out;el.style.display='block';
+}
 function razSaveAll(arr){localStorage.setItem('imobcpc_razao',JSON.stringify(arr));}
 function razSaveRecord(rec){
   const all=razGetAll();
