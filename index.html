@@ -2030,7 +2030,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.ge
             Exportar JSON
           </button>
         </div>
-        <div class="cfg-label">Balancetes Importados (<span id="up-count">0</span>)</div>
+        <div class="cfg-label">Balancetes Importados (<span id="up-count">0</span>) <button onclick="balDiag()" style="font-size:10px;padding:2px 8px;margin-left:8px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer">Diagnóstico Contas DRE</button></div>
+        <pre id="bal-diag" style="display:none;font-size:10px;background:#f8f8f8;border:1px solid #ddd;border-radius:6px;padding:10px;margin-top:8px;max-height:300px;overflow:auto;white-space:pre-wrap"></pre>
         <div class="up-list" id="up-list"><div class="up-empty">Nenhum dado importado</div></div>
         <div class="cfg-label" style="margin-top:12px">Razão Importado (<span id="raz-count">0</span>) <button onclick="razDiag()" style="font-size:10px;padding:2px 8px;margin-left:8px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer">Diagnóstico 3.1.1.02</button></div>
         <div class="up-list" id="raz-list"><div class="up-empty">Nenhum Razão importado</div></div>
@@ -3116,6 +3117,15 @@ function _parseRawBalancete(rows){
   dre['csll']=0; dre['irpj']=0; dre['ir']=0;
   dre['lucro']=dre['ebt'];
 
+  // Salva contas relevantes para diagnóstico (3.x com movimento)
+  const _accDiag={};
+  Object.keys(acc).forEach(k=>{
+    if((k.startsWith('3.1.3')||k.startsWith('3.2.3')||k.startsWith('3.3.'))&&(acc[k].d||acc[k].c)){
+      _accDiag[k]=acc[k];
+    }
+  });
+  dre['_acc']=_accDiag;
+
   return{empresa,mes,ano,bp_data:bp,dre_data:dre};
 }
 
@@ -3379,6 +3389,23 @@ function razDiag(){
       const codes=r.contas.filter(c=>c.code.startsWith('3.')).map(c=>c.code+':'+c.desc.substring(0,30)).join(', ');
       out+='  SEM conta 3.1.1.02. Contas 3.x: '+codes+'\n';
     }
+  });
+  el.textContent=out;el.style.display='block';
+}
+function balDiag(){
+  const el=document.getElementById('bal-diag');if(!el)return;
+  const ups=upGetAll().filter(u=>u.tipo==='DRE');
+  if(!ups.length){el.textContent='Nenhum balancete DRE importado.';el.style.display='block';return;}
+  let out='=== Contas 3.1.3 / 3.2.3 / 3.3.x com movimento ===\n';
+  ups.sort((a,b)=>a.ano-b.ano||a.mes-b.mes);
+  ups.forEach(u=>{
+    const acc=u.data?._acc;
+    out+='\n['+u.empresa+' '+u.mes+'/'+u.ano+']\n';
+    if(!acc||!Object.keys(acc).length){out+='  (reimporte para ver contas — dado antigo sem _acc)\n';return;}
+    Object.keys(acc).sort().forEach(k=>{
+      const a=acc[k];
+      out+='  '+k+' d='+a.d+' c='+a.c+'\n';
+    });
   });
   el.textContent=out;el.style.display='block';
 }
