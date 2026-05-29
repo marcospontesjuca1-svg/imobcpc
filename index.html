@@ -3399,12 +3399,26 @@ function balDiag(){
   let out='=== Contas 3.1.3 / 3.2.3 / 3.3.x com movimento ===\n';
   ups.sort((a,b)=>a.ano-b.ano||a.mes-b.mes);
   ups.forEach(u=>{
-    const acc=u.data?._acc;
-    out+='\n['+u.empresa+' '+u.mes+'/'+u.ano+']\n';
-    if(!acc||!Object.keys(acc).length){out+='  (reimporte para ver contas — dado antigo sem _acc)\n';return;}
-    Object.keys(acc).sort().forEach(k=>{
-      const a=acc[k];
-      out+='  '+k+' d='+a.d+' c='+a.c+'\n';
+    // _acc é armazenado como array de 12 (merge mensal): _acc[mesIdx] = {code: {d,c,...}}
+    const accRaw=u.data?._acc;
+    out+='\n['+u.empresa+' '+u.ano+']\n';
+    if(!accRaw){out+='  (reimporte para ver contas — dado antigo sem _acc)\n';return;}
+    const mn=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    let found=false;
+    const byCode={};
+    for(let i=0;i<12;i++){
+      const slot=Array.isArray(accRaw)?accRaw[i]:accRaw;
+      if(!slot||typeof slot!=='object'||Array.isArray(slot))continue;
+      Object.keys(slot).forEach(k=>{
+        if(!byCode[k])byCode[k]={};
+        byCode[k][mn[i]]={d:slot[k].d,c:slot[k].c};
+        found=true;
+      });
+    }
+    if(!found){out+='  (reimporte para ver contas)\n';return;}
+    Object.keys(byCode).sort().forEach(k=>{
+      const meses=Object.keys(byCode[k]).map(m=>m+'d='+byCode[k][m].d+'c='+byCode[k][m].c).join(' | ');
+      out+='  '+k+': '+meses+'\n';
     });
   });
   el.textContent=out;el.style.display='block';
