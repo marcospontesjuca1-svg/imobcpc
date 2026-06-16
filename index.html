@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -1905,6 +1905,13 @@ function resetAll(){
 }
 function backupHTML(){
   const tryDownload=html=>{
+    // Embeds localStorage import data so other machines load the same data on first visit
+    const seed={};
+    ['imobcpc_uploads','imobcpc_razao'].forEach(k=>{const v=localStorage.getItem(k);if(v)seed[k]=v;});
+    if(Object.keys(seed).length){
+      const inject=`<script id="__ls_seed">(function(){try{var d=${JSON.stringify(seed)};Object.keys(d).forEach(function(k){localStorage.setItem(k,d[k]);});}catch(e){}var el=document.getElementById('__ls_seed');if(el)el.parentNode.removeChild(el);})()+<\/script>`;
+      html=html.replace('</head>',inject+'</head>');
+    }
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -2070,10 +2077,23 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.ge
 <script>
 function restoreHTML(input){
   const file=input.files[0];if(!file)return;
-  if(!confirm('Substituir o arquivo atual pelo backup selecionado?\nEsta ação recarregará a página.'))return;
+  if(!confirm('Restaurar dados do backup selecionado?\nOs dados importados serão carregados nesta máquina.'))return;
   const reader=new FileReader();
   reader.onload=function(e){
-    const blob=new Blob([e.target.result],{type:'text/html;charset=utf-8'});
+    const html=e.target.result;
+    // Extract and apply embedded localStorage seed (data imported on other machines)
+    const m=html.match(/<script id="__ls_seed">[\s\S]*?var d=(\{[\s\S]*?\});[\s\S]*?<\/script>/);
+    if(m){
+      try{
+        const d=JSON.parse(m[1]);
+        Object.keys(d).forEach(k=>localStorage.setItem(k,d[k]));
+        cfgFb('Dados restaurados! Recarregando…','ok');
+        setTimeout(()=>location.reload(),800);
+        return;
+      }catch(ex){}
+    }
+    // Fallback: download file for manual replacement
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;a.download=location.pathname.split('/').pop()||'index.html';
