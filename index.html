@@ -1924,8 +1924,8 @@ function backupHTML(){
     tryDownload('<!DOCTYPE html>\n'+document.documentElement.outerHTML);
   });
 }
-document.getElementById('cfg-overlay').addEventListener('click',function(e){if(e.target===this)closeSettings()});
-document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.getElementById('cfg-overlay').classList.contains('open'))closeSettings()});
+var _cfgOv=document.getElementById('cfg-overlay');if(_cfgOv)_cfgOv.addEventListener('click',function(e){if(e.target===this)closeSettings()});
+document.addEventListener('keydown',function(e){var o=document.getElementById('cfg-overlay');if(e.key==='Escape'&&o&&o.classList.contains('open'))closeSettings()});
 </script>
 
 <!-- ═══════════════ DRE DETAIL OVERLAY ═══════════════ -->
@@ -3691,6 +3691,18 @@ function _cloudSt(msg,type){
   el.textContent=msg;el.className='cloud-status '+type;el.style.display='block';
 }
 
+function _fbSanitize(obj){
+  if(Array.isArray(obj))return obj.map(_fbSanitize);
+  if(obj&&typeof obj==='object'){
+    const out={};
+    Object.keys(obj).forEach(k=>{
+      const sk=k.replace(/\./g,'_').replace(/[\$#\[\]\/]/g,'_');
+      out[sk]=_fbSanitize(obj[k]);
+    });
+    return out;
+  }
+  return obj;
+}
 function _fbMerge(local,cloud,keyFn){
   // Merge two arrays keeping the record with higher timestamp for each key
   const map=new Map();
@@ -3708,8 +3720,8 @@ async function _autoSyncToCloud(){
   const base=url.replace(/\/+$/,'');
   try{
     const [r1,r2]=await Promise.all([
-      fetch(base+'/imobcpc_uploads.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(upGetAll())}),
-      fetch(base+'/imobcpc_razao.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(razGetAll())})
+      fetch(base+'/imobcpc_uploads.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_fbSanitize(upGetAll()))}),
+      fetch(base+'/imobcpc_razao.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_fbSanitize(razGetAll()))})
     ]);
     if(r1.ok&&r2.ok)localStorage.setItem('imobcpc_last_sync',new Date().toLocaleString('pt-BR'));
     else console.warn('auto-sync parcial:',r1.status,r2.status);
@@ -3755,19 +3767,18 @@ async function syncToCloud(){
   const base=url.replace(/\/+$/,'');
   _cloudSt('Enviando dados para a nuvem…','info');
   try{
-    const [r1,r2]=await Promise.all([
-      fetch(base+'/imobcpc_uploads.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(upGetAll())}),
-      fetch(base+'/imobcpc_razao.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(razGetAll())})
-    ]);
-    if(!r1.ok)throw new Error('HTTP '+r1.status);
-    if(!r2.ok)throw new Error('HTTP razão '+r2.status);
+    const uploads=_fbSanitize(upGetAll()), razao=_fbSanitize(razGetAll());
+    const r1=await fetch(base+'/imobcpc_uploads.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(uploads)});
+    if(!r1.ok){const t=await r1.text().catch(()=>'');throw new Error('Balancetes HTTP '+r1.status+(t?' — '+t:''));}
+    const r2=await fetch(base+'/imobcpc_razao.json'+auth,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(razao)});
+    if(!r2.ok){const t=await r2.text().catch(()=>'');throw new Error('Razão HTTP '+r2.status+(t?' — '+t:''));}
     const ts=new Date().toLocaleString('pt-BR');
     localStorage.setItem('imobcpc_last_sync',ts);
     const lsEl=document.getElementById('cfg-last-sync');
     if(lsEl)lsEl.textContent='Última sincronização: '+ts;
-    _cloudSt('Dados enviados com sucesso! (balancetes + razão)','ok');
+    _cloudSt('Dados enviados com sucesso! ('+uploads.length+' balancetes, '+razao.length+' razões)','ok');
     cfgFb('Sincronizado com a nuvem!','ok');
-  }catch(e){_cloudSt('Erro ao enviar: '+e.message,'err');cfgFb('Falha na sincronização.','err');}
+  }catch(e){_cloudSt('Erro: '+e.message,'err');cfgFb('Falha na sincronização.','err');}
 }
 
 async function syncFromCloud(){
