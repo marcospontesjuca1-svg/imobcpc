@@ -3191,9 +3191,9 @@ function _parseRawBalancete(rows){
   console.log('[DIAG] '+empresa+' '+mes+'/'+ano+' — rb='+dre['rb']+' ded='+dre['ded']+' rl='+dre['rl']+' cmo='+dre['cmo']+' cop='+dre['cop']+' cbs='+dre['cbs']+' lb='+dre['lb']);
   console.log('[DIAG] rfin='+dre['rfin']+' dpess='+dre['dpess']+' enc='+dre['enc']+' dog='+dre['dog']+' dtrib='+dre['dtrib']+' ir='+dre['ir']+' lucro='+dre['lucro']);
   console.log('[DIAG] _copPfx='+_copPfx+' _isCPC='+_isCPC);
-  console.log('[DIAG] TODAS contas com movimento:');
+  console.log('[DIAG] TODAS contas GRUPO 3+4 com movimento:');
   Object.keys(acc).sort().forEach(k=>{
-    const a=acc[k];if(a.d||a.c)console.log('[DIAG]   '+k+' sa='+a.sa+' d='+a.d+' c='+a.c+' su='+a.su);
+    const a=acc[k];if((a.d||a.c)&&(k.startsWith('3')||k.startsWith('4')))console.log('[DIAG]   '+k+' sa='+a.sa+' d='+a.d+' c='+a.c+' su='+a.su);
   });
 
   return{empresa,mes,ano,bp_data:bp,dre_data:dre};
