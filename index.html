@@ -3191,9 +3191,10 @@ function _parseRawBalancete(rows){
   console.log('[DIAG] '+empresa+' '+mes+'/'+ano+' — rb='+dre['rb']+' ded='+dre['ded']+' rl='+dre['rl']+' cmo='+dre['cmo']+' cop='+dre['cop']+' cbs='+dre['cbs']+' lb='+dre['lb']);
   console.log('[DIAG] rfin='+dre['rfin']+' dpess='+dre['dpess']+' enc='+dre['enc']+' dog='+dre['dog']+' dtrib='+dre['dtrib']+' ir='+dre['ir']+' lucro='+dre['lucro']);
   console.log('[DIAG] _copPfx='+_copPfx+' _isCPC='+_isCPC);
-  console.log('[DIAG] Contas 3.1.1.* encontradas:',Object.keys(acc).filter(k=>k.startsWith('3.1.1')).map(k=>k+' d='+acc[k].d+' c='+acc[k].c).join(' | '));
-  console.log('[DIAG] Contas 3.1.2.* encontradas:',Object.keys(acc).filter(k=>k.startsWith('3.1.2')).map(k=>k+' d='+acc[k].d+' c='+acc[k].c).join(' | '));
-  console.log('[DIAG] _sumLv 3.1.1 cr='+_sumLv('3.1.1','cr')+' | _sumLv 3.1.2 mv='+_sumLv('3.1.2','mv'));
+  console.log('[DIAG] TODAS contas com movimento:');
+  Object.keys(acc).sort().forEach(k=>{
+    const a=acc[k];if(a.d||a.c)console.log('[DIAG]   '+k+' sa='+a.sa+' d='+a.d+' c='+a.c+' su='+a.su);
+  });
 
   return{empresa,mes,ano,bp_data:bp,dre_data:dre};
 }
