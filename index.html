@@ -2633,8 +2633,13 @@ function razaoSetAno(ano, multiAnos){
 
   // ── Grupo 1: Receitas Financeiras (rfin) ──
   let rfinRows=Object.entries(rfin).map(([k,arr])=>({name:RFIN_LBL[k]||k,vals:fIdx.map(i=>arr[i]||0)})).filter(r=>r.vals.reduce((a,b)=>a+b,0)>0);
-  // Fallback: se não há detalhe por fundo, usa total mensal do DREF rfin
-  if(!rfinRows.length){const dRfinArr=(DREF[String(ano)]||{})['rfin']||[];const dRfinVals=fIdx.map(i=>dRfinArr[i]||0);if(dRfinVals.some(v=>v>0))rfinRows=[{name:'Receitas Financeiras',vals:dRfinVals}];}
+  // Fallback por mês: preenche meses sem dados do Razão usando DRE rfin
+  {const dRfinArr=(DREF[String(ano)]||{})['rfin']||[];
+  if(dRfinArr.some(v=>v>0)){
+    if(!rfinRows.length){rfinRows=[{name:'Receitas Financeiras',vals:fIdx.map(i=>dRfinArr[i]||0)}];}
+    else{const gapVals=fIdx.map((mi,j)=>{const razM=rfinRows.reduce((s,r)=>s+(r.vals[j]||0),0);const dreM=dRfinArr[mi]||0;return razM>0?0:Math.max(0,dreM);});
+    if(gapVals.some(v=>v>0))rfinRows.push({name:'Receitas Financeiras',vals:gapVals});}
+  }}
   const totalFin=rfinRows.reduce((s,r)=>s+r.vals.reduce((a,b)=>a+b,0),0);
 
   // ── Normalização por mês: escala clientes não-metro para rb(DRE) − rfin − metro ──
