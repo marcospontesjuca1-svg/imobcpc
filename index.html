@@ -2637,10 +2637,18 @@ function razaoSetAno(ano, multiAnos){
   if(!rfinRows.length){const dRfinArr=(DREF[String(ano)]||{})['rfin']||[];const dRfinVals=fIdx.map(i=>dRfinArr[i]||0);if(dRfinVals.some(v=>v>0))rfinRows=[{name:'Receitas Financeiras',vals:dRfinVals}];}
   const totalFin=rfinRows.reduce((s,r)=>s+r.vals.reduce((a,b)=>a+b,0),0);
 
-  // ── Normalização: escala clientes não-metro para soma = rb(DRE) − rfin − metro ──
+  // ── Normalização por mês: escala clientes não-metro para rb(DRE) − rfin − metro ──
   const dreRbArr2=(DREF[String(ano)]||{})['rb']||[];
   const _rbDRE=fIdx.reduce((s,i)=>s+(dreRbArr2[i]||0),0);
-  {const _mT=fIdx.reduce((s,i)=>s+(cli['SHOPPING METRO']?.[i]||0),0);const _tgt=Math.max(0,_rbDRE-totalFin-_mT);const _nmK=Object.keys(cli).filter(c=>c!=='SHOPPING METRO');const _rNM=_nmK.reduce((s,c)=>s+fIdx.reduce((ss,i)=>ss+(cli[c][i]||0),0),0);if(_rNM>0&&_tgt>=0){const _sf=_tgt/_rNM;_nmK.forEach(c=>{cli[c]=cli[c].map(v=>v*_sf);});}}
+  {const _nmK=Object.keys(cli).filter(c=>c!=='SHOPPING METRO');
+  fIdx.forEach((mi,j)=>{
+    const rbM=dreRbArr2[mi]||0;
+    const finM=rfinRows.reduce((s,r)=>s+(r.vals[j]||0),0);
+    const metM=(cli['SHOPPING METRO']||[])[mi]||0;
+    const tgtM=Math.max(0,rbM-finM-metM);
+    const rawM=_nmK.reduce((s,c)=>s+((cli[c]||[])[mi]||0),0);
+    if(rawM>0&&tgtM>=0){const sf=tgtM/rawM;_nmK.forEach(c=>{if(cli[c])cli[c][mi]=cli[c][mi]*sf;});}
+  });}
 
   // ── Grupo 2: Clientes Agrupados ──
   const clients=Object.keys(cli);
@@ -3210,6 +3218,7 @@ function _propIR(d){
     var ebts=q.map(function(m){return Math.max(ebt[m]||0,0);});
     var tEBT=ebts.reduce(function(s,v){return s+v;},0);
     if(tEBT<=0)return;
+    console.log('[_propIR] Q'+Math.floor(q[0]/3+1)+' tIR='+tIR+' tEBT='+tEBT+' distributing...');
     var csll=d['csll'];if(!csll){csll=new Array(12).fill(0);d['csll']=csll;}
     var irpj=d['irpj'];if(!irpj){irpj=new Array(12).fill(0);d['irpj']=irpj;}
     var lucro=d['lucro'];if(!lucro){lucro=new Array(12).fill(0);d['lucro']=lucro;}
@@ -3222,6 +3231,7 @@ function _propIR(d){
       irpj[m]=Math.round(tIRPJ*r*100)/100;
       lucro[m]=Math.round(((ebt[m]||0)-ir[m])*100)/100;
     });
+    console.log('[_propIR] After: ir='+JSON.stringify(ir.slice(q[0],q[0]+3))+' lucro='+JSON.stringify(d['lucro'].slice(q[0],q[0]+3)));
   });
 }
 
