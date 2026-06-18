@@ -3158,6 +3158,10 @@ function _parseRawBalancete(rows){
     dre['dvig']=mv('3.2.3.04.00028');dre['ddep']=mv('3.2.3.04.00021');
     dre['dasj']=mv('3.2.3.04.00026');
   }
+  if(!_isCPC && dre['ccond']){
+    dre['dcon']=dre['ccond'];dre['cop']-=dre['ccond'];dre['dog']+=dre['ccond'];
+    dre['ccond']=0;dre['cbs']=dre['cmo']+dre['cop'];dre['lb']=dre['rl']-dre['cbs'];
+  }
   dre['dsoft_inf']=mv('3.2.3.04.00027')+mv('3.2.3.04.00033');
   dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuTrib||0);
   dre['dout']=dre['dog']-dre['dman']-dre['dspj']-dre['dvei']-dre['dmkt']-dre['dvig']-dre['ddep']-dre['dasj']-dre['dcon']-dre['dsoft_inf'];
@@ -3193,6 +3197,34 @@ function _parseRawBalancete(rows){
 }
 
 
+function _propIR(d){
+  if(!d)return;
+  var Q=[[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
+  Q.forEach(function(q){
+    var ir=d['ir'];if(!ir)return;
+    var tIR=q.reduce(function(s,m){return s+(ir[m]||0);},0);
+    if(tIR<=0)return;
+    var irM=q.filter(function(m){return(ir[m]||0)>0;});
+    if(irM.length!==1)return;
+    var ebt=d['ebt']||[];
+    var ebts=q.map(function(m){return Math.max(ebt[m]||0,0);});
+    var tEBT=ebts.reduce(function(s,v){return s+v;},0);
+    if(tEBT<=0)return;
+    var csll=d['csll'];if(!csll){csll=new Array(12).fill(0);d['csll']=csll;}
+    var irpj=d['irpj'];if(!irpj){irpj=new Array(12).fill(0);d['irpj']=irpj;}
+    var lucro=d['lucro'];if(!lucro){lucro=new Array(12).fill(0);d['lucro']=lucro;}
+    var tCSLL=q.reduce(function(s,m){return s+(csll[m]||0);},0);
+    var tIRPJ=q.reduce(function(s,m){return s+(irpj[m]||0);},0);
+    q.forEach(function(m,i){
+      var r=ebts[i]/tEBT;
+      ir[m]=Math.round(tIR*r*100)/100;
+      csll[m]=Math.round(tCSLL*r*100)/100;
+      irpj[m]=Math.round(tIRPJ*r*100)/100;
+      lucro[m]=Math.round(((ebt[m]||0)-ir[m])*100)/100;
+    });
+  });
+}
+
 function applyUploads(){
   const ups=upGetAll();
   ups.sort((a,b)=>a.timestamp-b.timestamp);
@@ -3206,6 +3238,7 @@ function applyUploads(){
       else if(u.tipo==='DRE'){if(!ESAM_DREF[yr])ESAM_DREF[yr]={};Object.assign(ESAM_DREF[yr],u.data);}
     }
   });
+  [CPC_DREF,ESAM_DREF].forEach(function(DR){Object.keys(DR).forEach(function(yr){_propIR(DR[yr]);});});
   // Recalcula ANOS incluindo anos dos uploads
   const allAnos=new Set([...Object.keys(CPC_DREF).map(Number),...Object.keys(ESAM_DREF).map(Number)]);
   ANOS=[...allAnos].sort();
