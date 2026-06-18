@@ -3136,7 +3136,7 @@ function _parseRawBalancete(rows){
   dre['dspj']=mv('3.2.3.04.00009');
   dre['dmkt']=mv('3.2.3.04.00020')+mv('3.2.3.04.00048');
   dre['dcon']=mv('3.2.3.04.00016');
-  if(empresa==='ESAM'){
+  if(!_isCPC){
     dre['dman']=mv('3.2.3.04.00026');
     dre['dvei']=0;dre['dvig']=0;dre['ddep']=0;dre['dasj']=0;
   } else {
