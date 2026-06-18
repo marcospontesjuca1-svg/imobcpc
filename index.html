@@ -3132,7 +3132,8 @@ function _parseRawBalancete(rows){
   const _isCPC=(_copPfx==='3.1.8');
   dre['ccond']=_isCPC?mv('3.1.8.01.00004'):mv(_copPfx+'.01.00010');
   dre['calug']=_isCPC?mv('3.1.8.01.00005'):mv(_copPfx+'.01.00001');
-  dre['ciptu']=mv('3.2.3.03.00003')||(_isCPC?0:mv(_copPfx+'.01.00005'));
+  const _ciptuTrib=mv('3.2.3.03.00003');
+  dre['ciptu']=_ciptuTrib||(_isCPC?0:mv(_copPfx+'.01.00005'));
   dre['cspj']=_isCPC?mv('3.1.8.01.00012'):mv(_copPfx+'.01.00002');
   dre['csoft_out']=_isCPC?(mv('3.1.8.01.00013')+mv('3.1.8.01.00008')):(mv(_copPfx+'.01.00006')+mv(_copPfx+'.01.00007')+mv(_copPfx+'.01.00008'));
   dre['lb']=dre['rl']-dre['cbs'];
@@ -3158,7 +3159,7 @@ function _parseRawBalancete(rows){
     dre['dasj']=mv('3.2.3.04.00026');
   }
   dre['dsoft_inf']=mv('3.2.3.04.00027')+mv('3.2.3.04.00033');
-  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(dre['ciptu']||0);
+  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuTrib||0);
   dre['dout']=dre['dog']-dre['dman']-dre['dspj']-dre['dvei']-dre['dmkt']-dre['dvig']-dre['ddep']-dre['dasj']-dre['dcon']-dre['dsoft_inf'];
   const _irpj4=mv('4.1.1.01.00001')||0,_csll4=mv('4.1.1.01.00002')||0;
   const _ir4=(_irpj4+_csll4)||mv('4.1.1.01')||mv('4.1.1')||mv('4.1')||mv('4')||0;
@@ -3187,14 +3188,6 @@ function _parseRawBalancete(rows){
     }
   });
   dre['_acc']=_accDiag;
-
-  console.log('[DIAG] '+empresa+' '+mes+'/'+ano+' — rb='+dre['rb']+' ded='+dre['ded']+' rl='+dre['rl']+' cmo='+dre['cmo']+' cop='+dre['cop']+' cbs='+dre['cbs']+' lb='+dre['lb']);
-  console.log('[DIAG] rfin='+dre['rfin']+' dpess='+dre['dpess']+' enc='+dre['enc']+' dog='+dre['dog']+' dtrib='+dre['dtrib']+' ir='+dre['ir']+' lucro='+dre['lucro']);
-  console.log('[DIAG] _copPfx='+_copPfx+' _isCPC='+_isCPC);
-  console.log('[DIAG] TODAS contas GRUPO 3+4 com movimento:');
-  Object.keys(acc).sort().forEach(k=>{
-    const a=acc[k];if((a.d||a.c)&&(k.startsWith('3')||k.startsWith('4')))console.log('[DIAG]   '+k+' sa='+a.sa+' d='+a.d+' c='+a.c+' su='+a.su);
-  });
 
   return{empresa,mes,ano,bp_data:bp,dre_data:dre};
 }
