@@ -1348,6 +1348,8 @@ function buildDRETree(g){
   const dpess=g('dpess'),enc=g('enc');
   const dog=g('dog'),dman=g('dman'),dspj=g('dspj'),dvei=g('dvei'),dmkt=g('dmkt');
   const dvig=g('dvig'),ddep=g('ddep'),dasj=g('dasj'),dsoft_inf=g('dsoft_inf'),dout=g('dout');
+  const dcon=g('dcon')||0;
+  const cop_outros=Math.max(0,cop-g('ccond')-g('calug')-g('ciptu')-g('cspj')-g('csoft_out')-dcon);
   const dtrib=g('dtrib'),dfin=g('dfin');
   const ebt=g('ebt'),csll=g('csll'),irpj=g('irpj'),lucro=g('lucro');
 
@@ -1377,8 +1379,8 @@ function buildDRETree(g){
         {t:'IPTU',              v:-g('ciptu'),    cls:'dre-s3', detailKey:'ciptu'},
         {t:'Serviços PJ',       v:-g('cspj'),     cls:'dre-s3', detailKey:'cspj'},
         {t:'Softwares e outros',v:-g('csoft_out'),cls:'dre-s3', detailKey:'csoft_out'},
-        ...(g('dcon')?[{t:'Condomínio (adm.)', v:-g('dcon'),cls:'dre-s3', detailKey:'dcon'}]:[]),
-        ...(g('cop_outros')?[{t:'Outros custos',v:-g('cop_outros'),cls:'dre-s3'}]:[]),
+        ...(dcon?[{t:'Condomínio (adm.)', v:-dcon,cls:'dre-s3', detailKey:'dcon'}]:[]),
+        ...(cop_outros>0.01?[{t:'Outros custos',v:-cop_outros,cls:'dre-s3'}]:[]),
       ]},
     ]},
     {t:'= LUCRO BRUTO', v:lb, cls:'dre-res'},
