@@ -1377,8 +1377,8 @@ function buildDRETree(g){
         {t:'IPTU',              v:-g('ciptu'),    cls:'dre-s3', detailKey:'ciptu'},
         {t:'Serviços PJ',       v:-g('cspj'),     cls:'dre-s3', detailKey:'cspj'},
         {t:'Softwares e outros',v:-g('csoft_out'),cls:'dre-s3', detailKey:'csoft_out'},
-        {t:'Condomínio (adm.)', v:-g('dcon'),     cls:'dre-s3', detailKey:'dcon'},
-        {t:'Outros custos',     v:-g('cop_outros'),cls:'dre-s3'},
+        ...(g('dcon')?[{t:'Condomínio (adm.)', v:-g('dcon'),cls:'dre-s3', detailKey:'dcon'}]:[]),
+        ...(g('cop_outros')?[{t:'Outros custos',v:-g('cop_outros'),cls:'dre-s3'}]:[]),
       ]},
     ]},
     {t:'= LUCRO BRUTO', v:lb, cls:'dre-res'},
@@ -3210,7 +3210,7 @@ function _parseRawBalancete(rows){
       const sub=p+'.01';if(acc[sub]&&(acc[sub].d||acc[sub].c)){_copPfx=p;break;}
     }
   }
-  dre['cop']=mv(_copPfx)||mv(_copPfx+'.01')||_sumLv(_copPfx,'mv')||0; dre['cbs']=dre['cmo']+dre['cop'];
+  dre['cop']=mv(_copPfx)||mv(_copPfx+'.01')||_sumLv(_copPfx,'mv')||0;
   dre['csal']=mv('3.1.3.02.00001'); dre['c13']=mv('3.1.3.02.00012')||0; dre['cferi']=0;
   dre['cps_cal']=mv('3.1.3.02.00009');
   dre['cinss_fgts']=mv('3.1.3.02.00006')+mv('3.1.3.02.00007');
@@ -3219,8 +3219,11 @@ function _parseRawBalancete(rows){
   dre['calug']=_isCPC?mv('3.1.8.01.00005'):mv(_copPfx+'.01.00001');
   const _ciptuTrib=mv('3.2.3.03.00003');
   dre['ciptu']=_ciptuTrib||(_isCPC?0:mv(_copPfx+'.01.00005'));
+  // If IPTU came from tributos (not from cop prefix), add it to cop so children sum matches
+  if(_ciptuTrib){dre['cop']+=_ciptuTrib;}
   dre['cspj']=_isCPC?mv('3.1.8.01.00012'):mv(_copPfx+'.01.00002');
   dre['csoft_out']=_isCPC?(mv('3.1.8.01.00013')+mv('3.1.8.01.00008')):(mv(_copPfx+'.01.00006')+mv(_copPfx+'.01.00007')+mv(_copPfx+'.01.00008'));
+  dre['cbs']=dre['cmo']+dre['cop'];
   dre['lb']=dre['rl']-dre['cbs'];
   dre['rfin']=cr('3.2.2')||_sumLv('3.2.2','cr')||0;
   dre['dfin']=mv('3.2.2.01');
@@ -3255,16 +3258,16 @@ function _parseRawBalancete(rows){
   const _ir3=(_irpj3+_csll3)||mv('3.3')||0;
   if(_ir4>0){
     dre['irpj']=_irpj4;dre['csll']=_csll4;dre['ir']=_ir4;
-    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0));
+    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0));
     dre['lucro']=dre['ebt']-dre['ir'];
   } else if(_ir3>0){
     dre['irpj']=_irpj3;dre['csll']=_csll3;dre['ir']=_ir3;
     const _cr3=cr('3');
     if(acc['3']&&(acc['3'].d||acc['3'].c)){dre['lucro']=_cr3;dre['ebt']=_cr3+dre['ir'];}
-    else{dre['ebt']=dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0);dre['lucro']=dre['ebt']-dre['ir'];}
+    else{dre['ebt']=dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0);dre['lucro']=dre['ebt']-dre['ir'];}
   } else {
     dre['csll']=0;dre['irpj']=0;dre['ir']=0;
-    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0));
+    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0));
     dre['lucro']=dre['ebt'];
   }
 
