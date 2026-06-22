@@ -2366,14 +2366,16 @@ function _dkeyAcctCodes(dk){
 function _razaoLancs(empresa,ano,meses,acctCodes){
   if(!acctCodes.length)return[];
   const _ano=Number(ano),_emp=empresa==='cpc'?'CPC':'ESAM';
-  const mesSet=new Set(meses.map(m=>m+1));
+  const mesSet=new Set(meses);
   const lancs=[];
-  razGetAll().filter(r=>r.empresa===_emp&&r.ano===_ano&&mesSet.has(r.mes)).forEach(rec=>{
-    const mi=rec.mes-1;
+  razGetAll().filter(r=>r.empresa===_emp&&r.ano===_ano).forEach(rec=>{
+    const fb=rec.mes-1;
     (rec.contas||[]).forEach(conta=>{
       const match=acctCodes.some(pfx=>conta.code===pfx||conta.code.startsWith(pfx+'.'));
       if(!match)return;
       (conta.lanc||[]).forEach(l=>{
+        const mi=_lancMi(l,fb);
+        if(!mesSet.has(mi))return;
         lancs.push({dt:l.dt,hist:l.hist||'—',deb:l.deb||0,cre:l.cre||0,acct:conta.code,desc:conta.desc,mes:mi});
       });
     });
@@ -2428,14 +2430,18 @@ function _razAliasName(desc){
 // Each sub-account IS a client; deb = billing (mirrors CR to 3.1.1.02).
 // Non-result items excluded by _isCliConta/_NON_CLI_RE.
 // Totals are normalized to DRE rb after SHOPPING METRO + RFIN are subtracted.
+function _lancMi(l,fallback){
+  const p=parseInt((l.dt||'').split('/')[1]);
+  return p>=1&&p<=12?p-1:fallback;
+}
 function _razaoCliSrc(empresa,ano){
   const _ano=Number(ano);const res={};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
-    const mi=rec.mes-1;
+    const fb=rec.mes-1;
     (rec.contas||[]).filter(_isCliConta).forEach(conta=>{
       const name=_razAliasName(conta.desc);
       if(!res[name])res[name]=new Array(12).fill(0);
-      res[name][mi]+=(conta.deb||0);
+      (conta.lanc||[]).forEach(l=>{res[name][_lancMi(l,fb)]+=(l.deb||0);});
     });
   });
   return res;
@@ -2445,11 +2451,11 @@ function _razaoRtypeSrc(empresa,ano){
   const _ano=Number(ano);
   const res={'Locação':new Array(12).fill(0),'Lojas Metrô':new Array(12).fill(0)};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
-    const mi=rec.mes-1;
+    const fb=rec.mes-1;
     (rec.contas||[]).filter(_isCliConta).forEach(conta=>{
       const aname=_razAliasName(conta.desc);
       const key=/metr[oô]/i.test(aname)||aname==='SHOPPING METRO'?'Lojas Metrô':'Locação';
-      res[key][mi]+=(conta.deb||0);
+      (conta.lanc||[]).forEach(l=>{res[key][_lancMi(l,fb)]+=(l.deb||0);});
     });
   });
   return res;
@@ -2460,13 +2466,16 @@ function _razaoRcliSrc(empresa,ano){
   const _ano=Number(ano);
   const res={};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
-    const mi=rec.mes-1;
+    const fb=rec.mes-1;
     (rec.contas||[]).filter(_isCliConta).forEach(conta=>{
       const name=_razAliasName(conta.desc);
       if(!res[name])res[name]={fat:new Array(12).fill(0),rec:new Array(12).fill(0),sal:new Array(12).fill(0)};
-      res[name].fat[mi]+=(conta.deb||0);
-      res[name].rec[mi]+=(conta.cre||0);
-      res[name].sal[mi]=conta.su||0;
+      (conta.lanc||[]).forEach(l=>{
+        const mi=_lancMi(l,fb);
+        res[name].fat[mi]+=(l.deb||0);
+        res[name].rec[mi]+=(l.cre||0);
+      });
+      res[name].sal[fb]=conta.su||0;
     });
   });
   return res;
@@ -2476,14 +2485,14 @@ function _razaoFornSrc(empresa,ano){
   const _ano=Number(ano);
   const res={};
   razGetAll().filter(r=>r.empresa===empresa&&r.ano===_ano).forEach(rec=>{
-    const mi=rec.mes-1;
+    const fb=rec.mes-1;
     (rec.contas||[]).forEach(conta=>{
       const dk=_RAZ_ACCT_DKEY[conta.code];if(!dk)return;
       if(!res[dk])res[dk]={};
       (conta.lanc||[]).forEach(l=>{
         const lbl=l.hist||'—';
         if(!res[dk][lbl])res[dk][lbl]=new Array(12).fill(0);
-        res[dk][lbl][mi]+=(l.deb||0);
+        res[dk][lbl][_lancMi(l,fb)]+=(l.deb||0);
       });
     });
   });
@@ -3294,7 +3303,6 @@ function _propIR(d){
     var ebts=q.map(function(m){return Math.max(ebt[m]||0,0);});
     var tEBT=ebts.reduce(function(s,v){return s+v;},0);
     if(tEBT<=0)return;
-    console.log('[_propIR] Q'+Math.floor(q[0]/3+1)+' tIR='+tIR+' tEBT='+tEBT+' distributing...');
     var csll=d['csll'];if(!csll){csll=new Array(12).fill(0);d['csll']=csll;}
     var irpj=d['irpj'];if(!irpj){irpj=new Array(12).fill(0);d['irpj']=irpj;}
     var lucro=d['lucro'];if(!lucro){lucro=new Array(12).fill(0);d['lucro']=lucro;}
@@ -3307,7 +3315,6 @@ function _propIR(d){
       irpj[m]=Math.round(tIRPJ*r*100)/100;
       lucro[m]=Math.round(((ebt[m]||0)-ir[m])*100)/100;
     });
-    console.log('[_propIR] After: ir='+JSON.stringify(ir.slice(q[0],q[0]+3))+' lucro='+JSON.stringify(d['lucro'].slice(q[0],q[0]+3)));
   });
 }
 
