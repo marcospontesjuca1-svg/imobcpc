@@ -3724,12 +3724,38 @@ function _parseRazao(rows){
 function _saveRazaoResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if(!parsed.contas.length){cfgFb('Razão detectado mas sem contas reconhecidas. Verifique o arquivo.','err');return;}
-  razSaveRecord({empresa:parsed.empresa,ano:parsed.ano,mes:parsed.mes,contas:parsed.contas,filename,timestamp:Date.now()});
+  // Detect all months from lançamento dates
+  const mesesSet=new Set();
+  parsed.contas.forEach(c=>{(c.lanc||[]).forEach(l=>{
+    const m=parseInt((l.dt||'').split('/')[1]);
+    if(m>=1&&m<=12)mesesSet.add(m);
+  });});
+  if(!mesesSet.size)mesesSet.add(parsed.mes);
+  const meses=[...mesesSet].sort((a,b)=>a-b);
+  // Remove existing records for all covered months
+  const all=razGetAll();
+  razSaveAll(all.filter(r=>!(r.empresa===parsed.empresa&&r.ano===parsed.ano&&mesesSet.has(r.mes))));
+  // Split and save one record per month
+  meses.forEach(mes=>{
+    const contas=parsed.contas.map(conta=>{
+      const lanc=(conta.lanc||[]).filter(l=>{
+        const m=parseInt((l.dt||'').split('/')[1]);
+        return m===mes||(!(m>=1&&m<=12)&&mes===parsed.mes);
+      });
+      if(!lanc.length)return null;
+      const deb=lanc.reduce((s,l)=>s+(l.deb||0),0);
+      const cre=lanc.reduce((s,l)=>s+(l.cre||0),0);
+      const sa=mes===meses[0]?(conta.sa||0):0;
+      return{code:conta.code,desc:conta.desc,sa,deb,cre,su:sa+deb-cre,lanc};
+    }).filter(Boolean);
+    if(contas.length)razSaveRecord({empresa:parsed.empresa,ano:parsed.ano,mes,contas,filename,timestamp:Date.now()});
+  });
   _autoSyncToCloud();
   razRenderList();
   const locTab=document.getElementById('tab-loc');if(locTab)locTab.style.display='';
   _init.loc=false;
-  cfgFb('Razão importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano+' · '+parsed.contas.length+' contas','ok');
+  const mesLabel=meses.length>1?mn[meses[0]-1]+'–'+mn[meses[meses.length-1]-1]:mn[meses[0]-1];
+  cfgFb('Razão importado: '+parsed.empresa+' · '+mesLabel+'/'+parsed.ano+' · '+parsed.contas.length+' contas'+(meses.length>1?' · '+meses.length+' meses':''),'ok');
   // Navega para a aba Locatários automaticamente após o import
   setTimeout(()=>{
     closeSettings();
