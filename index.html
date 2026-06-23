@@ -2344,8 +2344,18 @@ const _RAZ_ACCT_DKEY={
 };
 // Reverse map: detailKey → [account code prefixes] for Razão lookup
 function _dkeyAcctCodes(dk){
+  const isCPC=_ACTIVE_CO==='cpc';
   const rev={};
   Object.entries(_RAZ_ACCT_DKEY).forEach(([code,key])=>{if(!rev[key])rev[key]=[];rev[key].push(code);});
+  // CPC: 00019=dman, 00026=dasj, 00024=dvei, 00028=dvig, 00021=ddep
+  // ESAM: 00026=dman, dasj/dvei/dvig/ddep não usadas
+  if(isCPC){
+    rev['dman']=['3.2.3.04.00019'];
+    rev['dasj']=['3.2.3.04.00026'];
+  } else {
+    rev['dman']=['3.2.3.04.00026'];
+    rev['dasj']=[];rev['dvei']=[];rev['dvig']=[];rev['ddep']=[];
+  }
   const extra={
     loc:['3.1.1.02.00001','3.1.1.01.00001'],venda:['3.1.1.02.00003','3.1.1.01.00003'],
     metro:['3.1.1.02.00002','3.1.1.01.00002'],outras:['3.1.1.03'],
@@ -2359,7 +2369,7 @@ function _dkeyAcctCodes(dk){
     dsal_pro:['3.2.3.01.00001','3.2.3.01.00002'],dpess:['3.2.3.01'],
     einss:['3.2.3.02.00001'],efgts:['3.2.3.02.00002'],efgtr:['3.2.3.02.00003'],enc:['3.2.3.02'],
     dps_vt_al:['3.2.3.01.00010','3.2.3.01.00022','3.2.3.01.00009'],
-    dcon:['3.2.3.04.00016'],dman:['3.2.3.04.00019','3.2.3.04.00026'],
+    dcon:['3.2.3.04.00016'],dman:isCPC?['3.2.3.04.00019']:['3.2.3.04.00026'],
     dtrib:['3.2.3.03'],csll:['4.1.1.01.00002','3.3.1.01'],irpj:['4.1.1.01.00001','3.3.1.02','3.3.2']
   };
   if(dk==='dout'){
