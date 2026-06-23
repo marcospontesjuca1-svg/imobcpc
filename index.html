@@ -619,7 +619,7 @@ const ESAM_RAZAO_CLI_2024={
   'IMIFARMA PROD.':[85077.79,83935.65,83935.65,81780.29,81780.29,81780.29,81780.29,81780.29,81780.29,81780.29,81780.29,81780.29],
   'C.E.D.P':[44640.03,40721.40,48567.39,45477.59,49718.03,72183.58,50513.69,52307.42,46698.20,49410.80,56175.58,106277.54],
   'OLIVEIRA':[40000.00,40000.00,40000.00,40000.00,40000.00,40000.00,41691.03,41691.03,41691.03,41691.03,41691.03,41691.03],
-  'BELCHIOR':[36870.51,35355.24,34270.51,33640.74,35147.31,32244.09,28352.81,28275.96,29173.63,56997.07,37208.80,46283.02],
+  'A. BELCHIOR':[36870.51,35355.24,34270.51,33640.74,35147.31,32244.09,28352.81,28275.96,29173.63,56997.07,37208.80,46283.02],
   'FIDUCIAL':[30747.93,30786.76,30786.76,30810.16,30887.06,30887.06,33479.57,33286.02,33355.68,33369.62,33369.62,33369.62],
   'TAVARES E NOBRE':[40039.27,32511.60,28917.81,28000.00,28000.00,28665.44,44378.91,30857.59,30857.59,30857.59,30857.59,50617.56],
   'COMETA':[24472.05,24829.15,0.00,25975.77,28119.97,28609.63,28219.22,30058.53,27340.13,28039.87,29667.27,33542.39],
@@ -642,7 +642,7 @@ const ESAM_RAZAO_CLI_2025={
   'SJ ADM':[112290.29,112299.56,112386.57,90645.39,46333.63,59446.65,67148.47,109374.29,109551.16,176087.32,125314.07,130134.77],
   'IMIFARMA PROD.':[81780.29,84029.51,84029.51,88189.88,88189.88,88189.88,88189.88,88189.88,88189.88,88189.88,88189.88,83189.88],
   'C.E.D.P':[57497.41,51623.80,54952.18,56784.11,61585.02,79610.36,60162.92,62594.78,56569.69,56985.53,65298.11,122865.19],
-  'BELCHIOR':[45704.73,44637.41,48491.31,60935.44,70699.04,71018.76,65838.81,66229.28,71426.99,68617.91,67345.70,85883.60],
+  'A. BELCHIOR':[45704.73,44637.41,48491.31,60935.44,70699.04,71018.76,65838.81,66229.28,71426.99,68617.91,67345.70,85883.60],
   'OLIVEIRA':[41691.03,41691.00,41691.03,41691.03,41691.03,41691.03,43921.99,43921.99,43921.99,43925.78,43925.78,43921.99],
   'TAVARES E NOBRE':[40091.48,30857.59,32713.89,30857.59,30857.59,30857.59,56173.47,40430.88,37430.53,38544.01,41621.34,55199.82],
   'FIDUCIAL':[33394.54,29916.22,33439.85,29916.22,30462.21,30453.52,33025.10,33025.10,33090.38,33103.44,33103.44,33103.44],
@@ -1348,6 +1348,8 @@ function buildDRETree(g){
   const dpess=g('dpess'),enc=g('enc');
   const dog=g('dog'),dman=g('dman'),dspj=g('dspj'),dvei=g('dvei'),dmkt=g('dmkt');
   const dvig=g('dvig'),ddep=g('ddep'),dasj=g('dasj'),dsoft_inf=g('dsoft_inf'),dout=g('dout');
+  const dcon=g('dcon')||0;
+  const cop_outros=Math.max(0,cop-g('ccond')-g('calug')-g('ciptu')-g('cspj')-g('csoft_out')-dcon);
   const dtrib=g('dtrib'),dfin=g('dfin');
   const ebt=g('ebt'),csll=g('csll'),irpj=g('irpj'),lucro=g('lucro');
 
@@ -1377,8 +1379,8 @@ function buildDRETree(g){
         {t:'IPTU',              v:-g('ciptu'),    cls:'dre-s3', detailKey:'ciptu'},
         {t:'Serviços PJ',       v:-g('cspj'),     cls:'dre-s3', detailKey:'cspj'},
         {t:'Softwares e outros',v:-g('csoft_out'),cls:'dre-s3', detailKey:'csoft_out'},
-        {t:'Condomínio (adm.)', v:-g('dcon'),     cls:'dre-s3', detailKey:'dcon'},
-        {t:'Outros custos',     v:-g('cop_outros'),cls:'dre-s3'},
+        ...(dcon?[{t:'Condomínio (adm.)', v:-dcon,cls:'dre-s3', detailKey:'dcon'}]:[]),
+        ...(cop_outros>0.01?[{t:'Outros custos',v:-cop_outros,cls:'dre-s3', detailKey:'cop_outros'}]:[]),
       ]},
     ]},
     {t:'= LUCRO BRUTO', v:lb, cls:'dre-res'},
@@ -2360,19 +2362,37 @@ function _dkeyAcctCodes(dk){
     dcon:['3.2.3.04.00016'],dman:['3.2.3.04.00019','3.2.3.04.00026'],
     dtrib:['3.2.3.03'],csll:['4.1.1.01.00002','3.3.1.01'],irpj:['4.1.1.01.00001','3.3.1.02','3.3.2']
   };
+  if(dk==='dout'){
+    const mapped=new Set();
+    ['dspj','dman','dcon','dmkt','dvei','dvig','ddep','dasj','dsoft_inf'].forEach(k=>{
+      (rev[k]||[]).forEach(c=>mapped.add(c));(extra[k]||[]).forEach(c=>mapped.add(c));
+    });
+    return{codes:['3.2.3.04'],exclude:mapped};
+  }
+  if(dk==='cop_outros'){
+    const mapped=new Set();
+    ['ccond','calug','ciptu','cspj','csoft_out'].forEach(k=>{
+      (rev[k]||[]).forEach(c=>mapped.add(c));(extra[k]||[]).forEach(c=>mapped.add(c));
+    });
+    return{codes:['3.1.7','3.1.8'],exclude:mapped};
+  }
   const codes=[...(rev[dk]||[]),...(extra[dk]||[])];
   return [...new Set(codes)];
 }
 function _razaoLancs(empresa,ano,meses,acctCodes){
-  if(!acctCodes.length)return[];
+  const isResidual=acctCodes&&acctCodes.codes;
+  const codes=isResidual?acctCodes.codes:acctCodes;
+  const exclude=isResidual?acctCodes.exclude:null;
+  if(!codes||!codes.length)return[];
   const _ano=Number(ano),_emp=empresa==='cpc'?'CPC':'ESAM';
   const mesSet=new Set(meses);
   const lancs=[];
   razGetAll().filter(r=>r.empresa===_emp&&r.ano===_ano).forEach(rec=>{
     const fb=rec.mes-1;
     (rec.contas||[]).forEach(conta=>{
-      const match=acctCodes.some(pfx=>conta.code===pfx||conta.code.startsWith(pfx+'.'));
+      const match=codes.some(pfx=>conta.code===pfx||conta.code.startsWith(pfx+'.'));
       if(!match)return;
+      if(exclude&&exclude.has(conta.code))return;
       (conta.lanc||[]).forEach(l=>{
         const mi=_lancMi(l,fb);
         if(!mesSet.has(mi))return;
@@ -2393,15 +2413,19 @@ const _RAZ_CLI_ALIAS={
   'LOJAS C & A':'LJS C&A','LOJAS C&A':'LJS C&A',
   'CAIXA ECONOMICA FEDERAL':'CEF','CAIXA ECONÔMICA FEDERAL':'CEF',
   'SJ ADMINISTRACAO DE IMOVEIS':'SJ ADM','SJ ADMINISTRAÇÃO DE IMÓVEIS':'SJ ADM',
+  'SJ ADMINISTRACAO DE IMOVEIS LTDA':'SJ ADM','SJ ADMINISTRAÇÃO DE IMÓVEIS LTDA':'SJ ADM',
+  'SJ ADM DE IMOVEIS':'SJ ADM','SJ ADM. DE IMOVEIS':'SJ ADM','SJ ADM':'SJ ADM',
   'LOJAS AMERICANAS':'AMERICANAS','AMERICANAS S.A.':'AMERICANAS',
   'SECRETARIA MUNICIPAL DE SAUDE':'SMS','SECRETARIA MUNICIPAL DE SAÚDE':'SMS',
   'FIDUCIAL - IMOBILIARIA':'FIDUCIAL','FIDUCIAL IMOBILIARIA':'FIDUCIAL','FIDUCIAL - IMOBILIÁRIA':'FIDUCIAL',
+  'FIDUCIAL IMOBILIÁRIA':'FIDUCIAL','FIDUCIAL - IMOBILIARIA LTDA':'FIDUCIAL','FIDUCIAL IMOBILIARIA LTDA':'FIDUCIAL',
+  'FIDUCIAL':'FIDUCIAL',
   'ALESSANDRO BELCHIOR ADM. DE IMOVEIS LTDA':'A. BELCHIOR','BELCHIOR ADM DE IMOVEIS':'A. BELCHIOR',
+  'ALESSANDRO BELCHIOR':'A. BELCHIOR','BELCHIOR':'A. BELCHIOR',
   'VIBRA ENERGIA S.A.':'VIBRA ENERG','VIBRA ENERGIA SA':'VIBRA ENERG',
   'ANCORA DISTRIBUIDORA LTDA':'ANCORA','ÂNCORA DISTRIBUIDORA LTDA':'ANCORA','ANCORA DIST LTDA':'ANCORA',
   'CARCARA GESTAO DE RECURSOS LTDA':'CARCARA','CARCARÁ GESTÃO DE RECURSOS LTDA':'CARCARA',
   'SHOPPING METRO SA':'SHOPPING METRO','CONDOMINIO SHOPPING METRO':'SHOPPING METRO',
-  'TAVARES E NOBRE SUPER':'TAVARES NOBRE SUPER',
   'C ROLIM':'C ROLIM','FRANCISCO CHAGAS ROLIM':'C ROLIM','ALESSANDRA SALES ROLIM':'C ROLIM',
   '746 COMERCIO E SERVICOS LTDA':'746 COM','746 COM LTDA':'746 COM',
   'RAIMUNDO JOSE VIANA':'RAIMUNDO J VIANA',
@@ -2411,6 +2435,30 @@ const _RAZ_CLI_ALIAS={
   'RECEITA – LOJA METRÔ':'SHOPPING METRO','RECEITA - LOJA METRÔ':'SHOPPING METRO',
   'RECEITA – LOJA METRO':'SHOPPING METRO','RECEITA - LOJA METRO':'SHOPPING METRO',
   'LOJA METRÔ':'SHOPPING METRO','LOJA METRO':'SHOPPING METRO',
+  'IMIFARMA PRODUTOS FARMACEUTICOS':'IMIFARMA PROD.','IMIFARMA PRODUTOS FARMACÊUTICOS':'IMIFARMA PROD.',
+  'IMIFARMA PROD':'IMIFARMA PROD.','IMIFARMA PRODUTOS FARMACEUTICOS LTDA':'IMIFARMA PROD.',
+  'J ALVES OLIVEIRA LTDA':'OLIVEIRA','J ALVES OLIVEIRA':'OLIVEIRA',
+  'TAVARES E NOBRE SUPERMERCADOS':'TAVARES E NOBRE','TAVARES E NOBRE SUPER':'TAVARES E NOBRE',
+  'TAVARES E NOBRE SUPERMERCADOS LTDA':'TAVARES E NOBRE',
+  'SUPERMERCADO COMETA EIRELI':'COMETA','SUPERMERCADO COMETA':'COMETA','COMETA EIRELI':'COMETA',
+  'FARMACIA ECONOMICA NACIONAL':'FARMACIA ECO','FARMÁCIA ECONÔMICA NACIONAL':'FARMACIA ECO',
+  'J F LOCACOES DE ESTCIONAMENTO LTDA':'J F LOC','J F LOCAÇÕES DE ESTCIONAMENTO LTDA':'J F LOC',
+  'J F LOCACOES DE ESTACIONAMENTO LTDA':'J F LOC','J F LOCAÇÕES DE ESTACIONAMENTO LTDA':'J F LOC',
+  'E F A COM ALIMENTOS LTDA':'COM ALIM','EFA COM ALIMENTOS LTDA':'COM ALIM',
+  'E F A COMERCIO DE ALIMENTOS LTDA':'COM ALIM',
+  'LINDOMAR MARIA FRANCESCONI':'LINDOMAR M.','LINDOMAR M FRANCESCONI':'LINDOMAR M.',
+  'EDVANIO OTAVIANO DE ALMEIDA MAGALHAES':'O. A. MAGALHAES','EDVÂNIO OTAVIANO DE ALMEIDA MAGALHÃES':'O. A. MAGALHAES',
+  'PANOBIANCO FORTALEZA LTDA':'PANOBIANCO','PANOBIANCO FORTALEZA':'PANOBIANCO',
+  'DANIMAR P. FOODS':'DANIMAR P. FOODS','DANIMAR P FOODS LTDA':'DANIMAR P. FOODS',
+  'ISAREL ELETRONICA CONCEITO LTDA':'ISAREL','ISAREL ELETRÔNICA CONCEITO LTDA':'ISAREL',
+  'Z V PET SHOP CONCEITO LTDA':'Z V PET SHOP',
+  'L. VIANA COMERCIO DE PETROLEO LTDA':'L. VIANA','L VIANA COMERCIO DE PETROLEO LTDA':'L. VIANA',
+  'CAROSA LTDA':'CAROSA',
+  'M. EUNICE DOS SANTOS':'M. EUNICE','M EUNICE DOS SANTOS':'M. EUNICE',
+  'PRAMORAR PARTICIPACOES':'PRAMORAR','PRAMORAR PARTICIPAÇÕES':'PRAMORAR','PRAMORAR PARTICIPACOES LTDA':'PRAMORAR',
+  'CREDITOS CONDOMINIOS':'CRED. CONDOMINIOS','CRÉDITOS CONDOMÍNIOS':'CRED. CONDOMINIOS',
+  'EJ ADMINISTRACAO DE IMOVEIS':'EJ ADM','EJ ADMINISTRAÇÃO DE IMÓVEIS':'EJ ADM',
+  'EJ ADMINISTRACAO DE IMOVEIS LTDA':'EJ ADM','EJ ADMINISTRAÇÃO DE IMÓVEIS LTDA':'EJ ADM',
 };
 // Contas não-clientes a excluir dos intervalos 1.1.2/1.1.3
 const _NON_CLI_RE=/ADIANTAMENTO|A RECUPERAR|A APROPRIAR|OUTROS CR[EÉE]DITOS|SAL[AÁA]RIO|FAMILIA|FGTS\s+A\b|INSS\s+A\b|\bIRRF\b|\bCSLL\b|\bPIS\b|\bCOFINS\b|^RUA\s|^AV\.?\s|^AVENIDA\s|^TRAVESSA\s|^ALAMEDA\s|^ESTRADA\s|^ROD\.?\s|^LOTE\s|^N[°º]\s|\bN[°º]\s*\d|ALESSANDRA\s+SALES\s+ROLIM|DASKALOS\s+PARTICIPA|MANUELA\s+SALES\s+ROLIM/i;
@@ -2423,6 +2471,13 @@ function _razAliasName(desc){
   if(/^CLIENTES/.test(dU))return 'SHOPPING METRO';
   if(/PISO\s*\d|PISO\s+[A-Z]|PAVIMENTO|[AÁ]REA\s+COMUM/i.test(dN))return 'SHOPPING METRO';
   if(/^LJ[\s\-\/]/.test(dU)||/^Q[\s\-\/]/.test(dU)||/METR[OÔ]/.test(dU)||/LOJA\s*METR/i.test(dN)||/RECEITA.*METR/i.test(dN))return 'SHOPPING METRO';
+  if(/\bSJ\b.*ADM/i.test(dU)||/\bSJ\b.*IM[OÓ]VE/i.test(dU))return 'SJ ADM';
+  if(/\bFIDUCIAL\b/i.test(dU))return 'FIDUCIAL';
+  if(/\bBELCHIOR\b/i.test(dU))return 'A. BELCHIOR';
+  if(/\bCENTRO\s+EMPRES.*DEL\s+PASEO\b/i.test(dU)||/\bC\.?E\.?D\.?P\b/i.test(dU))return 'C.E.D.P';
+  if(/\bIMIFARMA\b/i.test(dU))return 'IMIFARMA PROD.';
+  if(/\bCOMETA\b/i.test(dU))return 'COMETA';
+  if(/\bTAVARES.*NOBRE\b/i.test(dU))return 'TAVARES E NOBRE';
   return dN;
 }
 // Builds {clientName:[12months]} from revenue account 3.1.1.02.xx (Receita Prestação Serviços)
@@ -2610,7 +2665,7 @@ function razaoSetAno(ano, multiAnos){
   const fLbl=fIdx.map(i=>MESES_ABR[i]);
   const mLbl=_mesRangeLabel(fIdx);
   const RFIN_LBL={'RFIN_APLIC':'Aplicações Gerais','RFIN_XP':'XP Investimentos','RFIN_CEF_MAXI':'CEF FIC Maxi','RFIN_BRADESCO':'Bradesco FIC','RFIN_CEF_GIRO':'CEF FIC Giro'};
-  const AGRUPADOS=new Set(['C.E.D.P','SJ ADM','SHOPPING METRO','FIDUCIAL','A. BELCHIOR','SHOPPING BOA VISTA','BELCHIOR']);
+  const AGRUPADOS=new Set(['C.E.D.P','SJ ADM','SHOPPING METRO','FIDUCIAL','A. BELCHIOR','SHOPPING BOA VISTA']);
   const getCo=(src24,src25)=>_ACTIVE_CO==='cpc'?{'2024':src24,'2025':src25}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};
 
   // ── MULTI-YEAR comparison mode ────────────────────────────────────────────
@@ -3105,7 +3160,7 @@ function _detectRawBalancete(rows){
 }
 
 function _parseRawBalancete(rows){
-  let empresa='CPC',mes=1,ano=new Date().getFullYear();
+  let empresa='CPC',mes=1,mesInicio=1,ano=new Date().getFullYear();
 
   // Lê cabeçalho — busca em todas as colunas da linha
   for(let i=0;i<Math.min(8,rows.length);i++){
@@ -3116,8 +3171,11 @@ function _parseRawBalancete(rows){
       const v=String(row[c+1]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
       if(k==='Período:'||k==='Periodo:'||k==='Período:'){
-        const m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if(m){mes=parseInt(m[2]);ano=parseInt(m[3]);}
+        const matches=[...v.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+        if(matches.length){
+          mesInicio=parseInt(matches[0][2]);
+          const last=matches[matches.length-1];mes=parseInt(last[2]);ano=parseInt(last[3]);
+        }
       }
     }
   }
@@ -3219,7 +3277,7 @@ function _parseRawBalancete(rows){
       const sub=p+'.01';if(acc[sub]&&(acc[sub].d||acc[sub].c)){_copPfx=p;break;}
     }
   }
-  dre['cop']=mv(_copPfx)||mv(_copPfx+'.01')||_sumLv(_copPfx,'mv')||0; dre['cbs']=dre['cmo']+dre['cop'];
+  dre['cop']=mv(_copPfx)||mv(_copPfx+'.01')||_sumLv(_copPfx,'mv')||0;
   dre['csal']=mv('3.1.3.02.00001'); dre['c13']=mv('3.1.3.02.00012')||0; dre['cferi']=0;
   dre['cps_cal']=mv('3.1.3.02.00009');
   dre['cinss_fgts']=mv('3.1.3.02.00006')+mv('3.1.3.02.00007');
@@ -3227,9 +3285,18 @@ function _parseRawBalancete(rows){
   dre['ccond']=_isCPC?mv('3.1.8.01.00004'):mv(_copPfx+'.01.00010');
   dre['calug']=_isCPC?mv('3.1.8.01.00005'):mv(_copPfx+'.01.00001');
   const _ciptuTrib=mv('3.2.3.03.00003');
-  dre['ciptu']=_ciptuTrib||(_isCPC?0:mv(_copPfx+'.01.00005'));
+  const _ciptuCop=_isCPC?0:mv(_copPfx+'.01.00005');
+  // If COP already has its own IPTU account, use it; keep tributos IPTU in dtrib
+  // If COP has no IPTU, reclassify tributos IPTU into COP
+  if(_ciptuCop){
+    dre['ciptu']=_ciptuCop;
+  } else {
+    dre['ciptu']=_ciptuTrib||0;
+    if(_ciptuTrib){dre['cop']+=_ciptuTrib;}
+  }
   dre['cspj']=_isCPC?mv('3.1.8.01.00012'):mv(_copPfx+'.01.00002');
   dre['csoft_out']=_isCPC?(mv('3.1.8.01.00013')+mv('3.1.8.01.00008')):(mv(_copPfx+'.01.00006')+mv(_copPfx+'.01.00007')+mv(_copPfx+'.01.00008'));
+  dre['cbs']=dre['cmo']+dre['cop'];
   dre['lb']=dre['rl']-dre['cbs'];
   dre['rfin']=cr('3.2.2')||_sumLv('3.2.2','cr')||0;
   dre['dfin']=mv('3.2.2.01');
@@ -3253,7 +3320,7 @@ function _parseRawBalancete(rows){
     dre['dasj']=mv('3.2.3.04.00026');
   }
   dre['dsoft_inf']=mv('3.2.3.04.00027')+mv('3.2.3.04.00033');
-  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuTrib||0);
+  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuCop?0:(_ciptuTrib||0));
   // Move Condomínio (adm.) from DOG to COP/CBS
   if(dre['dcon']){dre['cop']+=dre['dcon'];dre['cbs']=dre['cmo']+dre['cop'];dre['lb']=dre['rl']-dre['cbs'];dre['dog']-=dre['dcon'];}
   dre['dout']=dre['dog']-dre['dman']-dre['dspj']-dre['dvei']-dre['dmkt']-dre['dvig']-dre['ddep']-dre['dasj']-dre['dsoft_inf'];
@@ -3264,16 +3331,16 @@ function _parseRawBalancete(rows){
   const _ir3=(_irpj3+_csll3)||mv('3.3')||0;
   if(_ir4>0){
     dre['irpj']=_irpj4;dre['csll']=_csll4;dre['ir']=_ir4;
-    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0));
+    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0));
     dre['lucro']=dre['ebt']-dre['ir'];
   } else if(_ir3>0){
     dre['irpj']=_irpj3;dre['csll']=_csll3;dre['ir']=_ir3;
     const _cr3=cr('3');
     if(acc['3']&&(acc['3'].d||acc['3'].c)){dre['lucro']=_cr3;dre['ebt']=_cr3+dre['ir'];}
-    else{dre['ebt']=dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0);dre['lucro']=dre['ebt']-dre['ir'];}
+    else{dre['ebt']=dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0);dre['lucro']=dre['ebt']-dre['ir'];}
   } else {
     dre['csll']=0;dre['irpj']=0;dre['ir']=0;
-    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['ciptu']||0)-(dre['dog']||0)-(dre['dfin']||0));
+    dre['ebt']=cr('3')||(dre['lb']+(dre['rfin']||0)-(dre['dpess']||0)-(dre['enc']||0)-(dre['dtrib']||0)-(dre['dog']||0)-(dre['dfin']||0));
     dre['lucro']=dre['ebt'];
   }
 
@@ -3286,7 +3353,7 @@ function _parseRawBalancete(rows){
   });
   dre['_acc']=_accDiag;
 
-  return{empresa,mes,ano,bp_data:bp,dre_data:dre};
+  return{empresa,mes,mesInicio,ano,bp_data:bp,dre_data:dre};
 }
 
 
@@ -3383,10 +3450,34 @@ function upProcessFile(input){
 // ─── Processamento do arquivo ───
 function _saveBalanceteResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:parsed.mes,data:parsed.bp_data,filename,timestamp:Date.now()});
-  upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:parsed.mes,data:parsed.dre_data,filename,timestamp:Date.now()});
-  applyUploads();upRenderList();
-  cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano,'ok');
+  const startM=parsed.mesInicio||parsed.mes;
+  const endM=parsed.mes;
+  if(startM<endM){
+    // Cumulative balancete (multi-month): subtract prior months to get each month's delta
+    const existing=upGetAll().find(u=>u.empresa===parsed.empresa&&u.tipo==='DRE'&&u.ano===parsed.ano);
+    const existBP=upGetAll().find(u=>u.empresa===parsed.empresa&&u.tipo==='BP'&&u.ano===parsed.ano);
+    for(let m=startM;m<=endM;m++){
+      const mi=m-1;
+      const dreDelta={};const bpData={...parsed.bp_data};
+      Object.keys(parsed.dre_data).forEach(k=>{
+        if(k==='_acc'){dreDelta[k]=parsed.dre_data[k];return;}
+        let cumVal=parsed.dre_data[k]||0;
+        for(let pm=startM-1;pm<mi;pm++){
+          cumVal-=((existing&&existing.data&&existing.data[k])?existing.data[k][pm]:0)||0;
+        }
+        dreDelta[k]=cumVal;
+      });
+      upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:m,data:dreDelta,filename,timestamp:Date.now()});
+    }
+    upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:endM,data:parsed.bp_data,filename,timestamp:Date.now()});
+    applyUploads();upRenderList();
+    cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[startM-1]+'–'+mn[endM-1]+'/'+parsed.ano+' · '+((endM-startM+1))+' meses','ok');
+  } else {
+    upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:parsed.mes,data:parsed.bp_data,filename,timestamp:Date.now()});
+    upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:parsed.mes,data:parsed.dre_data,filename,timestamp:Date.now()});
+    applyUploads();upRenderList();
+    cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano,'ok');
+  }
 }
 
 function upProcessFileObj(file){
@@ -3654,7 +3745,7 @@ function _parseRazao(rows){
       // Razão tem coluna vazia entre rótulo e valor: busca valor nas próximas 2 colunas
       const v=String(row[c+1]||'').trim()||String(row[c+2]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
-      if(k==='Período:'||k==='Periodo:'){const m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m){mes=parseInt(m[2]);ano=parseInt(m[3]);}}
+      if(k==='Período:'||k==='Periodo:'){const matches=[...v.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];if(matches.length){const last=matches[matches.length-1];mes=parseInt(last[2]);ano=parseInt(last[3]);}}
     }
   }
   const contas=[];let cur=null;
@@ -3684,12 +3775,38 @@ function _parseRazao(rows){
 function _saveRazaoResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if(!parsed.contas.length){cfgFb('Razão detectado mas sem contas reconhecidas. Verifique o arquivo.','err');return;}
-  razSaveRecord({empresa:parsed.empresa,ano:parsed.ano,mes:parsed.mes,contas:parsed.contas,filename,timestamp:Date.now()});
+  // Detect all months from lançamento dates
+  const mesesSet=new Set();
+  parsed.contas.forEach(c=>{(c.lanc||[]).forEach(l=>{
+    const m=parseInt((l.dt||'').split('/')[1]);
+    if(m>=1&&m<=12)mesesSet.add(m);
+  });});
+  if(!mesesSet.size)mesesSet.add(parsed.mes);
+  const meses=[...mesesSet].sort((a,b)=>a-b);
+  // Remove existing records for all covered months
+  const all=razGetAll();
+  razSaveAll(all.filter(r=>!(r.empresa===parsed.empresa&&r.ano===parsed.ano&&mesesSet.has(r.mes))));
+  // Split and save one record per month
+  meses.forEach(mes=>{
+    const contas=parsed.contas.map(conta=>{
+      const lanc=(conta.lanc||[]).filter(l=>{
+        const m=parseInt((l.dt||'').split('/')[1]);
+        return m===mes||(!(m>=1&&m<=12)&&mes===parsed.mes);
+      });
+      if(!lanc.length)return null;
+      const deb=lanc.reduce((s,l)=>s+(l.deb||0),0);
+      const cre=lanc.reduce((s,l)=>s+(l.cre||0),0);
+      const sa=mes===meses[0]?(conta.sa||0):0;
+      return{code:conta.code,desc:conta.desc,sa,deb,cre,su:sa+deb-cre,lanc};
+    }).filter(Boolean);
+    if(contas.length)razSaveRecord({empresa:parsed.empresa,ano:parsed.ano,mes,contas,filename,timestamp:Date.now()});
+  });
   _autoSyncToCloud();
   razRenderList();
   const locTab=document.getElementById('tab-loc');if(locTab)locTab.style.display='';
   _init.loc=false;
-  cfgFb('Razão importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano+' · '+parsed.contas.length+' contas','ok');
+  const mesLabel=meses.length>1?mn[meses[0]-1]+'–'+mn[meses[meses.length-1]-1]:mn[meses[0]-1];
+  cfgFb('Razão importado: '+parsed.empresa+' · '+mesLabel+'/'+parsed.ano+' · '+parsed.contas.length+' contas'+(meses.length>1?' · '+meses.length+' meses':''),'ok');
   // Navega para a aba Locatários automaticamente após o import
   setTimeout(()=>{
     closeSettings();
