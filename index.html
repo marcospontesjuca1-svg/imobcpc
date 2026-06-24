@@ -3748,15 +3748,26 @@ function _xlSerial2Date(s){
 
 function _parseRazao(rows){
   let empresa='CPC',mes=1,ano=new Date().getFullYear();
+  let colDeb=8,colCre=9,colSA=12;
   for(let i=0;i<Math.min(8,rows.length);i++){
     const row=rows[i]||[];
     for(let c=0;c<row.length;c++){
       const k=String(row[c]||'').trim();
-      // Razão tem coluna vazia entre rótulo e valor: busca valor nas próximas 2 colunas
       const v=String(row[c+1]||'').trim()||String(row[c+2]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
       if(k==='Período:'||k==='Periodo:'){const matches=[...v.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];if(matches.length){const last=matches[matches.length-1];mes=parseInt(last[2]);ano=parseInt(last[3]);}}
     }
+  }
+  // Auto-detect column positions by scanning for header labels
+  for(let i=0;i<Math.min(30,rows.length);i++){
+    const row=rows[i]||[];
+    for(let c=0;c<row.length;c++){
+      const lbl=String(row[c]||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+      if(lbl==='debito'||lbl==='débito'||lbl==='deb'||lbl==='deb.'){colDeb=c;}
+      if(lbl==='credito'||lbl==='crédito'||lbl==='cred'||lbl==='cre'||lbl==='cre.'){colCre=c;}
+      if(lbl==='saldo anterior'||lbl==='saldo ant.'||lbl==='saldo ant'){colSA=c;}
+    }
+    if(colDeb!==8||colCre!==9)break;
   }
   const contas=[];let cur=null;
   for(let i=0;i<rows.length;i++){
@@ -3766,25 +3777,30 @@ function _parseRazao(rows){
     if(c0==='Conta:'){
       cur={code:c2,desc:c5,sa:0,deb:0,cre:0,su:0,lanc:[]};contas.push(cur);
     }else if(cur&&c2==='SALDO ANTERIOR'){
-      cur.sa=parseFloat(String(row[12]||0).replace(',','.'))||0;cur.su=cur.sa;
+      cur.sa=parseFloat(String(row[colSA]||0).replace(',','.'))||0;cur.su=cur.sa;
     }else if(cur&&c4==='Total da conta:'){
-      cur.deb=parseFloat(String(row[8]||0).replace(',','.'))||0;
-      cur.cre=parseFloat(String(row[9]||0).replace(',','.'))||0;
+      cur.deb=parseFloat(String(row[colDeb]||0).replace(',','.'))||0;
+      cur.cre=parseFloat(String(row[colCre]||0).replace(',','.'))||0;
       cur.su=cur.sa+cur.deb-cur.cre;
     }else if(cur&&typeof row[0]==='number'&&row[0]>1&&c2&&c2!=='SALDO ANTERIOR'){
-      const deb=parseFloat(String(row[8]||0).replace(',','.'))||0;
-      const cre=parseFloat(String(row[9]||0).replace(',','.'))||0;
+      const deb=parseFloat(String(row[colDeb]||0).replace(',','.'))||0;
+      const cre=parseFloat(String(row[colCre]||0).replace(',','.'))||0;
       const histLines=c2.split('\n').map(l=>l.trim()).filter(Boolean);
       const hist=(histLines.length>1?histLines[histLines.length-1]:histLines[0]||'').substring(0,80);
       if(deb||cre)cur.lanc.push({dt:_xlSerial2Date(row[0]),hist,deb,cre});
     }
   }
-  return{empresa,mes,ano,contas};
+  return{empresa,mes,ano,contas,_cols:{deb:colDeb,cre:colCre,sa:colSA}};
 }
 
 function _saveRazaoResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if(!parsed.contas.length){cfgFb('Razão detectado mas sem contas reconhecidas. Verifique o arquivo.','err');return;}
+  if(parsed._cols){
+    console.log('[Razão] Colunas detectadas: Déb=col'+parsed._cols.deb+', Cré=col'+parsed._cols.cre+', SA=col'+parsed._cols.sa);
+    const sample=parsed.contas.find(c=>c.lanc&&c.lanc.length>0);
+    if(sample)console.log('[Razão] Amostra conta '+sample.code+': 1º lanc deb='+sample.lanc[0].deb+' cre='+sample.lanc[0].cre+' | Total conta deb='+sample.deb+' cre='+sample.cre+' su='+sample.su);
+  }
   // Detect all months from lançamento dates
   const mesesSet=new Set();
   parsed.contas.forEach(c=>{(c.lanc||[]).forEach(l=>{
