@@ -3142,7 +3142,7 @@ function _detectRawBalancete(rows){
 }
 
 function _parseRawBalancete(rows){
-  let empresa='CPC',mes=1,ano=new Date().getFullYear();
+  let empresa='CPC',mes=1,mesInicio=1,ano=new Date().getFullYear();
 
   // Lê cabeçalho — busca em todas as colunas da linha
   for(let i=0;i<Math.min(8,rows.length);i++){
@@ -3153,8 +3153,11 @@ function _parseRawBalancete(rows){
       const v=String(row[c+1]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
       if(k==='Período:'||k==='Periodo:'||k==='Período:'){
-        const m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        if(m){mes=parseInt(m[2]);ano=parseInt(m[3]);}
+        const matches=[...v.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+        if(matches.length){
+          mesInicio=parseInt(matches[0][2]);
+          const last=matches[matches.length-1];mes=parseInt(last[2]);ano=parseInt(last[3]);
+        }
       }
     }
   }
@@ -3326,7 +3329,7 @@ function _parseRawBalancete(rows){
   });
   dre['_acc']=_accDiag;
 
-  return{empresa,mes,ano,bp_data:bp,dre_data:dre};
+  return{empresa,mes,mesInicio,ano,bp_data:bp,dre_data:dre};
 }
 
 
@@ -3423,10 +3426,34 @@ function upProcessFile(input){
 // ─── Processamento do arquivo ───
 function _saveBalanceteResult(parsed,filename){
   const mn=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:parsed.mes,data:parsed.bp_data,filename,timestamp:Date.now()});
-  upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:parsed.mes,data:parsed.dre_data,filename,timestamp:Date.now()});
-  applyUploads();upRenderList();
-  cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano,'ok');
+  const startM=parsed.mesInicio||parsed.mes;
+  const endM=parsed.mes;
+  if(startM<endM){
+    // Cumulative balancete (multi-month): subtract prior months to get each month's delta
+    const existing=upGetAll().find(u=>u.empresa===parsed.empresa&&u.tipo==='DRE'&&u.ano===parsed.ano);
+    const existBP=upGetAll().find(u=>u.empresa===parsed.empresa&&u.tipo==='BP'&&u.ano===parsed.ano);
+    for(let m=startM;m<=endM;m++){
+      const mi=m-1;
+      const dreDelta={};const bpData={...parsed.bp_data};
+      Object.keys(parsed.dre_data).forEach(k=>{
+        if(k==='_acc'){dreDelta[k]=parsed.dre_data[k];return;}
+        let cumVal=parsed.dre_data[k]||0;
+        for(let pm=startM-1;pm<mi;pm++){
+          cumVal-=((existing&&existing.data&&existing.data[k])?existing.data[k][pm]:0)||0;
+        }
+        dreDelta[k]=cumVal;
+      });
+      upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:m,data:dreDelta,filename,timestamp:Date.now()});
+    }
+    upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:endM,data:parsed.bp_data,filename,timestamp:Date.now()});
+    applyUploads();upRenderList();
+    cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[startM-1]+'–'+mn[endM-1]+'/'+parsed.ano+' · '+((endM-startM+1))+' meses','ok');
+  } else {
+    upSaveRecord({empresa:parsed.empresa,tipo:'BP',ano:parsed.ano,mes:parsed.mes,data:parsed.bp_data,filename,timestamp:Date.now()});
+    upSaveRecord({empresa:parsed.empresa,tipo:'DRE',ano:parsed.ano,mes:parsed.mes,data:parsed.dre_data,filename,timestamp:Date.now()});
+    applyUploads();upRenderList();
+    cfgFb('Balancete importado: '+parsed.empresa+' · '+mn[parsed.mes-1]+'/'+parsed.ano,'ok');
+  }
 }
 
 function upProcessFileObj(file){
@@ -3694,7 +3721,7 @@ function _parseRazao(rows){
       // Razão tem coluna vazia entre rótulo e valor: busca valor nas próximas 2 colunas
       const v=String(row[c+1]||'').trim()||String(row[c+2]||'').trim();
       if(k==='Empresa:'){empresa=v.toUpperCase().includes('ESAM')?'ESAM':'CPC';}
-      if(k==='Período:'||k==='Periodo:'){const m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m){mes=parseInt(m[2]);ano=parseInt(m[3]);}}
+      if(k==='Período:'||k==='Periodo:'){const matches=[...v.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];if(matches.length){const last=matches[matches.length-1];mes=parseInt(last[2]);ano=parseInt(last[3]);}}
     }
   }
   const contas=[];let cur=null;
