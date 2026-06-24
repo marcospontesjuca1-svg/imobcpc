@@ -3267,9 +3267,15 @@ function _parseRawBalancete(rows){
   dre['ccond']=_isCPC?mv('3.1.8.01.00004'):mv(_copPfx+'.01.00010');
   dre['calug']=_isCPC?mv('3.1.8.01.00005'):mv(_copPfx+'.01.00001');
   const _ciptuTrib=mv('3.2.3.03.00003');
-  dre['ciptu']=_ciptuTrib||(_isCPC?0:mv(_copPfx+'.01.00005'));
-  // If IPTU came from tributos (not from cop prefix), add it to cop so children sum matches
-  if(_ciptuTrib){dre['cop']+=_ciptuTrib;}
+  const _ciptuCop=_isCPC?0:mv(_copPfx+'.01.00005');
+  // If COP already has its own IPTU account, use it; keep tributos IPTU in dtrib
+  // If COP has no IPTU, reclassify tributos IPTU into COP
+  if(_ciptuCop){
+    dre['ciptu']=_ciptuCop;
+  } else {
+    dre['ciptu']=_ciptuTrib||0;
+    if(_ciptuTrib){dre['cop']+=_ciptuTrib;}
+  }
   dre['cspj']=_isCPC?mv('3.1.8.01.00012'):mv(_copPfx+'.01.00002');
   dre['csoft_out']=_isCPC?(mv('3.1.8.01.00013')+mv('3.1.8.01.00008')):(mv(_copPfx+'.01.00006')+mv(_copPfx+'.01.00007')+mv(_copPfx+'.01.00008'));
   dre['cbs']=dre['cmo']+dre['cop'];
@@ -3296,7 +3302,7 @@ function _parseRawBalancete(rows){
     dre['dasj']=mv('3.2.3.04.00026');
   }
   dre['dsoft_inf']=mv('3.2.3.04.00027')+mv('3.2.3.04.00033');
-  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuTrib||0);
+  dre['dtrib']=(mv('3.2.3.03')||_sumLv('3.2.3.03','mv')||0)-(_ciptuCop?0:(_ciptuTrib||0));
   // Move Condomínio (adm.) from DOG to COP/CBS
   if(dre['dcon']){dre['cop']+=dre['dcon'];dre['cbs']=dre['cmo']+dre['cop'];dre['lb']=dre['rl']-dre['cbs'];dre['dog']-=dre['dcon'];}
   dre['dout']=dre['dog']-dre['dman']-dre['dspj']-dre['dvei']-dre['dmkt']-dre['dvig']-dre['ddep']-dre['dasj']-dre['dsoft_inf'];
