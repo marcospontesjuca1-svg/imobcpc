@@ -2671,8 +2671,9 @@ function razaoSetAno(ano, multiAnos){
       const totalFin=rfinRows.reduce((s,r)=>s+r.tot,0);
       const dreArr=(DREF[String(a)]||{})['rb']||[];
       const _rbDREa=fIdx.reduce((s,i)=>s+(dreArr[i]||0),0);
-      // Normalização: escala clientes não-metro para soma = rb(DRE) − rfin − metro
-      {const _mT=apF(cliA['SHOPPING METRO']||[]);const _tgt=Math.max(0,_rbDREa-totalFin-_mT);const _nmK=Object.keys(cliA).filter(c=>c!=='SHOPPING METRO');const _rNM=_nmK.reduce((s,c)=>s+apF(cliA[c]),0);if(_rNM>0&&_tgt>=0){const _sf=_tgt/_rNM;_nmK.forEach(c=>{cliA[c]=cliA[c].map(v=>v*_sf);});}}
+      // Normalização só para dados hardcoded (2024/2025); Razão importado fica sem escala
+      const _hc=!!cliSrc[String(a)];
+      if(_hc){const _mT=apF(cliA['SHOPPING METRO']||[]);const _tgt=Math.max(0,_rbDREa-totalFin-_mT);const _nmK=Object.keys(cliA).filter(c=>c!=='SHOPPING METRO');const _rNM=_nmK.reduce((s,c)=>s+apF(cliA[c]),0);if(_rNM>0&&_tgt>=0){const _sf=_tgt/_rNM;_nmK.forEach(c=>{cliA[c]=cliA[c].map(v=>v*_sf);});}}
       const totals={};Object.keys(cliA).forEach(c=>{totals[c]=apF(cliA[c])});
       const recBruta=_rbDREa||Object.values(totals).reduce((s,v)=>s+v,0)+totalFin;
       return{cliA,rfinRows,totalFin,totals,recBruta};
@@ -2733,7 +2734,7 @@ function razaoSetAno(ano, multiAnos){
   }
 
   // ── SINGLE-YEAR mode (original code) ─────────────────────────────────────
-  const _coS=_ACTIVE_CO==='cpc'?'CPC':'ESAM';const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const cli=(cliR[String(ano)])||_razaoCliSrc(_coS,ano);
+  const _coS=_ACTIVE_CO==='cpc'?'CPC':'ESAM';const cliR=_ACTIVE_CO==='cpc'?{'2024':CPC_RAZAO_CLI_2024,'2025':CPC_RAZAO_CLI_2025}:{'2024':ESAM_RAZAO_CLI_2024,'2025':ESAM_RAZAO_CLI_2025};const _fromHardcoded=!!cliR[String(ano)];const cli=(cliR[String(ano)])||_razaoCliSrc(_coS,ano);
   // SHOPPING METRO usa DRE 'metro' como fonte autoritativa
   const dreMetroArrS=(DREF[String(ano)]||{})['metro']||[];
   if(dreMetroArrS.some(v=>v>0))cli['SHOPPING METRO']=dreMetroArrS;
@@ -2754,9 +2755,10 @@ function razaoSetAno(ano, multiAnos){
   const totalFin=rfinRows.reduce((s,r)=>s+r.vals.reduce((a,b)=>a+b,0),0);
 
   // ── Normalização por mês: escala clientes não-metro para rb(DRE) − rfin − metro ──
+  // Só aplica para dados hardcoded (2024/2025); dados do Razão importado ficam sem escala
   const dreRbArr2=(DREF[String(ano)]||{})['rb']||[];
   const _rbDRE=fIdx.reduce((s,i)=>s+(dreRbArr2[i]||0),0);
-  {const _nmK=Object.keys(cli).filter(c=>c!=='SHOPPING METRO');
+  if(_fromHardcoded){const _nmK=Object.keys(cli).filter(c=>c!=='SHOPPING METRO');
   fIdx.forEach((mi,j)=>{
     const rbM=dreRbArr2[mi]||0;
     const finM=rfinRows.reduce((s,r)=>s+(r.vals[j]||0),0);
