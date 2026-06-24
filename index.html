@@ -2819,9 +2819,17 @@ function razaoSetAno(ano, multiAnos){
   cliInt.forEach(c=>{const vals=fIdx.map(i=>cli[c][i]||0);html+=dataRow(c,vals,totals[c])});
   html+=subRow(fIdx.map(i=>cliInt.reduce((s,c)=>s+(cli[c][i]||0),0)),totalInt);
 
-  // Total geral = soma dos três grupos por mês (após normalização bate com recBruta)
-  const dreMonthVals=fIdx.map((mi,j)=>rfinRows.reduce((s,r)=>s+r.vals[j],0)+cliAgrp.reduce((s,c)=>s+(cli[c][mi]||0),0)+cliInt.reduce((s,c)=>s+(cli[c][mi]||0),0));
-  html+=`<tr class="ch"><td>TOTAL GERAL</td>${dreMonthVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
+  // Total geral = DRE receita bruta; ajuste concilia AR × contas de receita
+  const rawMonthVals=fIdx.map((mi,j)=>rfinRows.reduce((s,r)=>s+r.vals[j],0)+cliAgrp.reduce((s,c)=>s+(cli[c][mi]||0),0)+cliInt.reduce((s,c)=>s+(cli[c][mi]||0),0));
+  const rawTotal=rawMonthVals.reduce((a,b)=>a+b,0);
+  if(!_fromHardcoded&&_rbDRE>0&&Math.abs(rawTotal-_rbDRE)>1){
+    const adjVals=fIdx.map((mi,j)=>(dreRbArr2[mi]||0)-rawMonthVals[j]);
+    const adjTotal=_rbDRE-rawTotal;
+    html+=`<tr style="color:#888;font-style:italic"><td>Ajuste AR × Receita</td>${adjVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(adjTotal,false)}</td><td class="tot-col">${pct(adjTotal)}</td></tr>`;
+    html+=`<tr class="ch"><td>TOTAL GERAL</td>${fIdx.map(mi=>`<td>${F(dreRbArr2[mi]||0,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
+  } else {
+    html+=`<tr class="ch"><td>TOTAL GERAL</td>${rawMonthVals.map(v=>`<td>${F(v,false)}</td>`).join('')}<td class="tot-col">${F(recBruta,false)}</td><td class="tot-col">100%</td></tr></tbody>`;
+  }
 
   document.getElementById('t-razao-cli').innerHTML=html;
 
