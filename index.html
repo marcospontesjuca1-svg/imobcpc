@@ -2651,6 +2651,8 @@ function openDreDetail(detailKey){
       });
       const tDeb=lancs.reduce((s,l)=>s+l.deb,0),tCre=lancs.reduce((s,l)=>s+l.cre,0);
       html+=`<tr class="ch"><td colspan="3">TOTAL</td><td>${F(tDeb,false)}</td><td>${F(tCre,false)}</td></tr>`;
+      const saldo=tDeb-tCre;
+      html+=`<tr style="font-weight:700;background:#eaf3de"><td colspan="3">SALDO (Déb − Cré) = valor DRE</td><td colspan="2" style="text-align:right">${F(Math.abs(saldo),false)}${saldo<0?' (C)':saldo>0?' (D)':''}</td></tr>`;
       html+='</tbody></table></div>';
     }
   });
