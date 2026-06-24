@@ -1380,7 +1380,7 @@ function buildDRETree(g){
         {t:'Serviços PJ',       v:-g('cspj'),     cls:'dre-s3', detailKey:'cspj'},
         {t:'Softwares e outros',v:-g('csoft_out'),cls:'dre-s3', detailKey:'csoft_out'},
         ...(dcon?[{t:'Condomínio (adm.)', v:-dcon,cls:'dre-s3', detailKey:'dcon'}]:[]),
-        ...(cop_outros>0.01?[{t:'Outros custos',v:-cop_outros,cls:'dre-s3'}]:[]),
+        ...(cop_outros>0.01?[{t:'Outros custos',v:-cop_outros,cls:'dre-s3', detailKey:'cop_outros'}]:[]),
       ]},
     ]},
     {t:'= LUCRO BRUTO', v:lb, cls:'dre-res'},
@@ -2344,8 +2344,16 @@ const _RAZ_ACCT_DKEY={
 };
 // Reverse map: detailKey → [account code prefixes] for Razão lookup
 function _dkeyAcctCodes(dk){
+  const isCPC=_ACTIVE_CO==='cpc';
   const rev={};
   Object.entries(_RAZ_ACCT_DKEY).forEach(([code,key])=>{if(!rev[key])rev[key]=[];rev[key].push(code);});
+  if(isCPC){
+    rev['dman']=['3.2.3.04.00019'];
+    rev['dasj']=['3.2.3.04.00026'];
+  } else {
+    rev['dman']=['3.2.3.04.00026'];
+    rev['dasj']=[];rev['dvei']=[];rev['dvig']=[];rev['ddep']=[];
+  }
   const extra={
     loc:['3.1.1.02.00001','3.1.1.01.00001'],venda:['3.1.1.02.00003','3.1.1.01.00003'],
     metro:['3.1.1.02.00002','3.1.1.01.00002'],outras:['3.1.1.03'],
@@ -2359,22 +2367,40 @@ function _dkeyAcctCodes(dk){
     dsal_pro:['3.2.3.01.00001','3.2.3.01.00002'],dpess:['3.2.3.01'],
     einss:['3.2.3.02.00001'],efgts:['3.2.3.02.00002'],efgtr:['3.2.3.02.00003'],enc:['3.2.3.02'],
     dps_vt_al:['3.2.3.01.00010','3.2.3.01.00022','3.2.3.01.00009'],
-    dcon:['3.2.3.04.00016'],dman:['3.2.3.04.00019','3.2.3.04.00026'],
+    dcon:['3.2.3.04.00016'],dman:isCPC?['3.2.3.04.00019']:['3.2.3.04.00026'],
     dtrib:['3.2.3.03'],csll:['4.1.1.01.00002','3.3.1.01'],irpj:['4.1.1.01.00001','3.3.1.02','3.3.2']
   };
+  if(dk==='dout'){
+    const mapped=new Set();
+    ['dspj','dman','dcon','dmkt','dvei','dvig','ddep','dasj','dsoft_inf'].forEach(k=>{
+      (rev[k]||[]).forEach(c=>mapped.add(c));(extra[k]||[]).forEach(c=>mapped.add(c));
+    });
+    return{codes:['3.2.3.04'],exclude:mapped};
+  }
+  if(dk==='cop_outros'){
+    const mapped=new Set();
+    ['ccond','calug','ciptu','cspj','csoft_out'].forEach(k=>{
+      (rev[k]||[]).forEach(c=>mapped.add(c));(extra[k]||[]).forEach(c=>mapped.add(c));
+    });
+    return{codes:['3.1.7','3.1.8'],exclude:mapped};
+  }
   const codes=[...(rev[dk]||[]),...(extra[dk]||[])];
   return [...new Set(codes)];
 }
 function _razaoLancs(empresa,ano,meses,acctCodes){
-  if(!acctCodes.length)return[];
+  const isResidual=acctCodes&&acctCodes.codes;
+  const codes=isResidual?acctCodes.codes:acctCodes;
+  const exclude=isResidual?acctCodes.exclude:null;
+  if(!codes||!codes.length)return[];
   const _ano=Number(ano),_emp=empresa==='cpc'?'CPC':'ESAM';
   const mesSet=new Set(meses);
   const lancs=[];
   razGetAll().filter(r=>r.empresa===_emp&&r.ano===_ano).forEach(rec=>{
     const fb=rec.mes-1;
     (rec.contas||[]).forEach(conta=>{
-      const match=acctCodes.some(pfx=>conta.code===pfx||conta.code.startsWith(pfx+'.'));
+      const match=codes.some(pfx=>conta.code===pfx||conta.code.startsWith(pfx+'.'));
       if(!match)return;
+      if(exclude&&exclude.has(conta.code))return;
       (conta.lanc||[]).forEach(l=>{
         const mi=_lancMi(l,fb);
         if(!mesSet.has(mi))return;
